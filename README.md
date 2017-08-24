@@ -73,7 +73,7 @@ If you want to pass a recombination map, include the filepath here.
 If you want to pass a collection of recombination maps, include the filepath here. The filename should contain the symbol @, `msprime_sim` will replace instances of @ with chromosome numbers.
 
 `--no-migration`  
-Turn off migration in the demographic history - currently only has an effect for "out-of-africa" and "out-of-africa-all-pops" in the `--sim-type` flag.
+Turn off migration in the demographic history - currently only has an effect for `out-of-africa` and `out-of-africa-all-pops` in the `--sim-type` flag.
 
 `--prop-EUR`  
 If using the `unicorn` simulation scenario, what proportion of samples does the European portion make up? (Default: 0.75).
