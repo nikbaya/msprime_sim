@@ -88,7 +88,7 @@ def write_trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 		os.system('cut -f 3,4,5,6 ' +  bfile_out + '.bim > ' + tmp_bim)
 		os.system('paste ' + tmp_tsv + ' ' + tmp_bim + ' > ' + bfile_out + '.bim')
 		os.system('rm ' + tmp_tsv + '; rm ' + tmp_bim)
-		# os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
+
 		# Now remove the .vcf files.
 		os.system('rm ' + vcf_name + '; rm ' + vcf_name + '.bak; rm ' + bfile_out + '.fam.bak')
 
@@ -96,6 +96,9 @@ def write_trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 		# Rename 'A' to '0'.
  		os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
  		os.system('rm ' + tmp_index_tsv)
+ 		# Remove the .bak and temporary files
+ 		os.system('rm ' + bfile_out + '*.bak')
+ 		os.system('rm ' + bfile_out + '*~')
 
 	pop_ann = np.empty(N)
 
