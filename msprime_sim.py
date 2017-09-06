@@ -60,7 +60,7 @@ def write_trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 	index_new = [i for i in sample_index]
 	matches = [x for x in index_new if x == 0]
 	if len(matches) == 1:
-		index_new[matches[0]] = 'A'
+		index_new[index_new.index(0)] = 'A'
 
 	# Create a new table to define the re-indexing of the tree. 
 	# Writing to .vcf does not save the sample numbers, so we need to keep track of these and 
@@ -95,7 +95,7 @@ def write_trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 		os.system('../plink/plink --update-ids ' + tmp_index_tsv + ' --bfile ' + bfile_out + ' --make-bed --out ' + bfile_out)
 		# Rename 'A' to '0'.
  		os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
- 		os.system('rm ' + tmp_index_tsv)
+ 		# os.system('rm ' + tmp_index_tsv)
  		# Remove the .bak and temporary files
  		os.system('rm ' + bfile_out + '*.bak')
  		os.system('rm ' + bfile_out + '*~')
@@ -385,8 +385,10 @@ def simulate_tree_and_betas(args, log):
 			log.log('Warning: Sample prevalence is close to population prevalence, '
 				'forcing no ascertainment bias to avoid an error being thrown during sampling procedure.')
 			args.sample_prevalence = None
+	
 	if args.free_and_no_intercept and args.no_intercept:
 			raise ValueError("Can't set both no-intercept and free-and-no-intercept.")
+	
 	# Find out whether we need to read in recombination maps.
 	if args.rec_map_chr:
 		rec_map_list = []
@@ -405,6 +407,7 @@ def simulate_tree_and_betas(args, log):
 
 	for sim in xrange(args.n_sims):
 		if (sim == 0) or (args.fix_genetics is False):
+			
 			# Choose the population demographic model to use.
 			if args.sim_type == 'standard':
 				migration_matrix=None
@@ -443,11 +446,10 @@ def simulate_tree_and_betas(args, log):
 				sample_size = None
 
 			log.log('Simulating genetic data using msprime:')
+			
 			# Create a list to fill with tree_sequences.
 			tree_sequence_list = []
 			tree_sequence_list_geno = []
-			lN_A_list = []
-			lN_D_list = []
 			m_total, m_geno_total = 0, 0
 			rec_map = None
 			m, m_geno = np.zeros(args.n_chr).astype(int), np.zeros(args.n_chr).astype(int)
@@ -539,6 +541,21 @@ def simulate_tree_and_betas(args, log):
 						lN_A[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_D[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, ldsc_index)
 						time_elapsed = round(time.time()-start_time,2)
 						log.log('Time to evaluate LD scores: {T}'.format(T=pr.sec_to_str(time_elapsed)))
+						if args.write_l2:
+							if chr == 0:
+								mut_names, chr_vec = np.empty(0), np.empty(0)
+							mut_names = np.hstack((mut_names, np.core.defchararray.add('rs.' + str(chr+1) + ".", np.arange(1,m_geno[chr]+1).astype('str'))))
+							chr_vec = np.hstack((chr_vec, np.tile(chr+1, m_geno[chr])))
+
+					if args.write_l2:
+						# Write the LD scores to disk.
+						# Now, fix the chromosome number and the names of the mutations - this is as in the write_vcf function, so the 
+						# resultant mutation names are identical.
+						d={'CHR':chr_vec.astype(int), 'SNP': mut_names, 'L2_AA':lN_A, 'L2_DD':lN_D}
+						df=pd.DataFrame(d)
+						df = df[['CHR', 'SNP', 'L2_AA', 'L2_DD']]
+						l2_tsv = args.out + ".sim" + str(sim+1) + '.l2'
+						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
 
 		# Now, run through the chromosomes in this collection of trees, 
 		# and determine the number of causal variants for each chromosome.
@@ -625,20 +642,20 @@ def simulate_tree_and_betas(args, log):
 				m_causal = int(m[chr] * args.p_causal)
 				beta_A, beta_D, beta_AC = np.zeros(m[chr]), np.zeros(m[chr]), np.zeros(m[chr])
 				beta_A_causal_index = random.sample(xrange(m[chr]), m_causal)
-				log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal_D, mc=m[chr]))
+				log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
 
 				if args.h2_A > 0:
 					beta_A[beta_A_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_A / (m_total * args.p_causal)), size=m_causal)
 				
 				if args.dominance:
 					beta_D, beta_D_causal_index = np.zeros(m[chr]), random.sample(xrange(m[chr]), m_causal)
-					log.log('Picked {m} dominance causal variants out of {mc}'.format(m=m_causal_D, mc=m[chr]))
+					log.log('Picked {m} dominance causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
 					if args.h2_D > 0:
 						beta_D[beta_D_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal)
 
 				if args.gxe:
 					beta_AC, beta_AC_causal_index = np.zeros(m[chr]), random.sample(xrange(m[chr]), mc=m_causal)
-					log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal_D, mc=m[chr]))
+					log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
 					if args.h2_AC > 0:
 						beta_AC[beta_AC_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_AC / (m_total * args.p_causal)), size=m_causal)
 
@@ -728,7 +745,7 @@ def simulate_tree_and_betas(args, log):
 
 		# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
 		# sub-sampling here.
-		if args.ldsc is True:
+		if args.ldsc:
 			if args.ldscore_within_sample is True and args.case_control is True: # DEV: Currently we have no ascertainment for continuous traits coded up.
 				if args.ldscore_sampling_prop is None:
 					ldsc_index = index
@@ -747,6 +764,18 @@ def simulate_tree_and_betas(args, log):
 					lN_A[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_D[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, ldsc_index)
 					time_elapsed = round(time.time()-start_time,2)
 					log.log('Time to evaluate LD scores in chromosome {chr}: {T}'.format(T=pr.sec_to_str(time_elapsed)))
+
+				if args.write_l2:
+						# Write the LD scores to disk.
+						# Now, fix the chromosome number and the names of the mutations - this is as in the write_vcf function, so the 
+						# resultant mutation names are identical.
+						mut_names=np.core.defchararray.add('rs.' + str(chr+1) + ".", np.arange(1,m_geno[chr]+1).astype('str'))
+						chr_vec=np.tile(chr+1, m)
+						d={'CHR':chr_vec, 'SNP': mut_names, 'L2_AA':lN_A, 'L2_DD':lN_D}
+						df=pd.DataFrame(d)
+						df = df[['CHR', 'SNP', 'L2_AA', 'L2_DD']]
+						l2_tsv = args.out + ".sim" + str(sim+1) + '.l2'
+						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
 
 			# Intercept options for the regression.
 			intercept_h2 = [None]
@@ -915,6 +944,8 @@ parser.add_argument('--write-pheno', default=False, action='store_true',
 	help='Do you want to write the phenotypes to disk?')
 parser.add_argument('--prop-EUR', default=0.75, type=float,
 	help='What proportion of samples does the European portion make up?')
+parser.add_argument('--write-l2', default=False, action='store_true', 
+	help='Do you want to write the LD scores for this simulation to disk?')
 
 
 if __name__ == '__main__':
