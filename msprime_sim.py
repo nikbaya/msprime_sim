@@ -947,7 +947,6 @@ parser.add_argument('--prop-EUR', default=0.75, type=float,
 parser.add_argument('--write-l2', default=False, action='store_true', 
 	help='Do you want to write the LD scores for this simulation to disk?')
 
-
 if __name__ == '__main__':
 
 	args = parser.parse_args()
