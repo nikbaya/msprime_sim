@@ -12,17 +12,18 @@ import time, sys, traceback, argparse
 import pandas as pd
 import src.printing as pr
 import src.msprime_sim_scenarios as mssim
-import src.sumstats as sumstats
+# import src.sumstats as sumstats
 import src.regressions as reg
 import statsmodels.api as sm
 import tqdm
 import tempfile
 import scipy.stats as sp
 import random
+from itertools import islice
 
 def p_to_z(p, N):
-    # Convert p-value and N to standardized beta.
-    return np.sqrt(sp.chi2.isf(p, 1))
+	# Convert p-value and N to standardized beta.
+	return np.sqrt(sp.chi2.isf(p, 1))
 
 def progress(progress_bars, range_object, total):
 	if progress_bars:
@@ -31,10 +32,10 @@ def progress(progress_bars, range_object, total):
 		return range_object
 
 def sub_chr(s, chr):
-    # Substitute chr for @, else append chr to the end of str.
-    if '@' not in s:
-        s += '@'
-    return s.replace('@', str(chr))
+	# Substitute chr for @, else append chr to the end of str.
+	if '@' not in s:
+		s += '@'
+	return s.replace('@', str(chr))
 
 def l2(x, n):
 	sq = np.square(x)
@@ -94,11 +95,11 @@ def write_trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 
 		os.system('../plink/plink --update-ids ' + tmp_index_tsv + ' --bfile ' + bfile_out + ' --make-bed --out ' + bfile_out)
 		# Rename 'A' to '0'.
- 		os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
- 		# os.system('rm ' + tmp_index_tsv)
- 		# Remove the .bak and temporary files
- 		os.system('rm ' + bfile_out + '*.bak')
- 		os.system('rm ' + bfile_out + '*~')
+		os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
+		# os.system('rm ' + tmp_index_tsv)
+		# Remove the .bak and temporary files
+		os.system('rm ' + bfile_out + '*.bak')
+		os.system('rm ' + bfile_out + '*~')
 
 	pop_ann = np.empty(N)
 
@@ -111,94 +112,116 @@ def write_trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 		df_pop.to_csv(out + ".sim" + str(sim+1) + '.pop.tsv', sep='\t', header=True, index=False)
 
 def getBlockLefts(coords, max_dist):
-    M = len(coords)
-    j = 0
-    block_left = np.zeros(M)
-    for i in xrange(M):
-        while j < M and abs(coords[j] - coords[i]) > max_dist:
-            j += 1
-        block_left[i] = j
-    return block_left
+	M = len(coords)
+	j = 0
+	block_left = np.zeros(M)
+	for i in xrange(M):
+		while j < M and abs(coords[j] - coords[i]) > max_dist:
+			j += 1
+		block_left[i] = j
 
-def nextSNP(variant, index=None):
+	return block_left
+
+# Normalize additive and dominance entries in sample.
+def standardize(X):
+	n = len(X)
+	mean_X = np.mean(X)
+	p = mean_X / 2
+	X_A = (X - mean_X) / np.std(X)
+
+	X_D = np.copy(X)
+	X_D[X_D == 2] = 0
+
+	G = np.concatenate((np.ones((n, 1)), X_A[:, None], X_D[:, None]), axis = 1)
+	X_D = math.sqrt(n) * np.linalg.qr(G)[0][:,-1]
+
+	# X_D = np.ones(n)
+	# X_D[X == 0] = - p / (1 - p)
+	# X_D[X == 2] = - (1 - p) / p
+	# X_D = (X_D - np.mean(X_D)) / np.std(X_D)
+	
+	return X_A, X_D
+
+def nextSNP(variant, Xs, index=None):
 	if index is None:
 		var_tmp = np.array(map(int, variant.genotypes[0::2])) + np.array(map(int, variant.genotypes[1::2]))
 	else:
 		var_tmp = np.array(map(int, variant.genotypes[0::2][index])) + np.array(map(int, variant.genotypes[1::2][index]))
 	
 	n = len(var_tmp)
-	# Additive term.
-	mean_X = np.mean(var_tmp)
-	p = mean_X / 2
-	# Evaluate the mean and then sd to normalise.
-	X_A = (var_tmp - mean_X) / np.std(var_tmp)
-	# Dominance term.
-	X_D = np.ones(n)
-	X_D[var_tmp == 0] = - p / (1 - p)
-	X_D[var_tmp == 2] = - (1 - p) / p
-	# Evaluate the mean and then sd to normalise.
-	X_D = (X_D - np.mean(X_D)) / np.std(X_D)
-	return X_A, X_D
+	X_A, X_D = standardize(var_tmp)
 
-def nextSNP_add(variant, index=None):
-	
-	if index is None:
-		var_tmp = np.array(map(int, variant.genotypes[0::2])) + np.array(map(int, variant.genotypes[1::2]))
-	else:
-		var_tmp = np.array(map(int, variant.genotypes[0::2][index])) + np.array(map(int, variant.genotypes[1::2][index]))
+	X_E = np.zeros(n)
 
-	# Additive term.
-	mean_X = np.mean(var_tmp)
-	p = mean_X / 2
-	# Evaluate the mean and then sd to normalise.
-	X_A = (var_tmp - mean_X) / np.std(var_tmp)
+	if Xs is not None:
+		Xs_A, Xs_D = standardize(Xs)
+		G = np.concatenate((np.ones((n, 1)), X_A[:, None], Xs_A[:, None], X_D[:, None], Xs_D[:, None], np.multiply(X_A, Xs_A)[:, None]), axis=1)
+
+		X_E = math.sqrt(n) * np.linalg.qr(G)[0][:, -1]
+
+	return X_A, X_D, X_E
+
+def nextSNP_add(variant, Xs, index=None):
+	X_A, X_D, X_E = nextSNP(variant, Xs, index=None)
 	return X_A
 
-def obtain_K(variants, K_A, K_D, K_AC, C, c, m, n, progress_bars, index):
+def nextSNP_dom(variant, Xs, index=None):
+	X_A, X_D, X_E = nextSNP(variant, Xs, index=None)
+	return X_D
 
-	# Number of chunks of length c in m sites.
-	n_c = np.floor(m/c).astype(int)
-	X_A, X_D = np.empty((n, c)), np.empty((n, c))
-	C_mat = np.repeat(C, c).reshape((n, c))
+def nextSNP_epi(variant, Xs, index=None):
+	X_A, X_D, X_E = nextSNP(variant, Xs, index=None)
+	return X_E
 
-	for i in progress(progress_bars, xrange(n_c), total=n_c):
-		k = 0
+# def obtain_K(variants, K_A, K_D, K_AC, C, c, m, n, progress_bars, index):
 
-		while k < c:
-			variant = variants.next()
-			X_A[:,k], X_D[:,k] = nextSNP(variant, index)
-			k += 1
+# 	# Number of chunks of length c in m sites.
+# 	n_c = np.floor(m/c).astype(int)
+# 	X_A, X_D = np.empty((n, c)), np.empty((n, c))
+# 	C_mat = np.repeat(C, c).reshape((n, c))
+
+# 	for i in progress(progress_bars, xrange(n_c), total=n_c):
+# 		k = 0
+
+# 		while k < c:
+# 			variant = variants.next()
+# 			X_A[:,k], X_D[:,k] = nextSNP(variant, index)
+# 			k += 1
 		
-		K_A += np.dot(X_A, X_A.T)
-		K_D += np.dot(X_D, X_D.T)
-		K_AC += np.dot(C_mat * X_A, (C_mat * X_A).T)
+# 		K_A += np.dot(X_A, X_A.T)
+# 		K_D += np.dot(X_D, X_D.T)
+# 		K_AC += np.dot(C_mat * X_A, (C_mat * X_A).T)
 		
-	# The final chunk.
-	if (n_c * c) < m:
-		k = 0
-		c = m - (n_c * c)
-		X_A, X_D = np.empty((n, c)), np.empty((n, c))
-		C_mat = np.repeat(C, c).reshape((n, c))
+# 	# The final chunk.
+# 	if (n_c * c) < m:
+# 		k = 0
+# 		c = m - (n_c * c)
+# 		X_A, X_D = np.empty((n, c)), np.empty((n, c))
+# 		C_mat = np.repeat(C, c).reshape((n, c))
 
-		while k < c:
-			variant = variants.next()
-			X_A[:,k], X_D[:,k] = nextSNP(variant, index)
-			k += 1
+# 		while k < c:
+# 			variant = variants.next()
+# 			X_A[:,k], X_D[:,k] = nextSNP(variant, index)
+# 			k += 1
 
-		K_A += np.dot(X_A, X_A.T)
-		K_D += np.dot(X_D, X_D.T)
-		K_AC += np.dot(C_mat * X_A, (C_mat * X_A).T)
+# 		K_A += np.dot(X_A, X_A.T)
+# 		K_D += np.dot(X_D, X_D.T)
+# 		K_AC += np.dot(C_mat * X_A, (C_mat * X_A).T)
 
-	return K_A, K_D, K_AC
+# 	return K_A, K_D, K_AC
 
-def corSumVarBlocks(variants, block_left, c, m, N, ldsc_index):
-
+# m := number of SNPs
+# N := number of individuals
+def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2, both, ldsc_index):
+	track_A = []
+	track_B = []
 	block_sizes = np.array(np.arange(m) - block_left)
 	block_sizes = (np.ceil(block_sizes / c) * c).astype(int)
-	cor_sum_A, cor_sum_D = np.zeros(m), np.zeros(m)
+	cor_sum1, cor_sum2 = np.zeros(m), np.zeros(m)
 
 	# b = index of first SNP for which SNP 0 is not included in LD Score
 	b = np.nonzero(block_left > 0)
+	# print b
 	if np.any(b):
 		b = b[0][0]
 	else:
@@ -206,27 +229,34 @@ def corSumVarBlocks(variants, block_left, c, m, N, ldsc_index):
 	b = int(np.ceil(b/c)*c)  # Round up to a multiple of c
 
 	if b > m:
-	    c = 1
-	    b = m
+		c = 1
+		b = m
 	l_A = 0  # l_A := index of leftmost SNP in matrix A
 
 	k = 0
 	
-	A = np.empty((N,b))
+	A1, A2 = np.empty((N,b)), np.empty((N,b))
 	while k < b:
 		variant = variants.next()
-		A[:,k] = nextSNP_add(variant, index=ldsc_index)
+		
+		A1[:,k] = snp_getter1(variant, Xs, index=ldsc_index)
+		# print variant.index
+		A2[:,k] = snp_getter2(variant, Xs, index=ldsc_index)
+		# print variant.index
 		k += 1
 
 	rfuncAB = np.zeros((b, c))
+	rfuncBA = np.zeros((c, b))
 	rfuncBB = np.zeros((c, c))
+
 	# Chunk inside of block
 	for l_B in xrange(0, b, c):  # l_B := index of leftmost SNP in matrix B
-	    B = A[:, l_B:l_B+c]
-	    np.dot(A.T, B / N, out=rfuncAB)
-	    rfuncAB = l2(rfuncAB, N)
-	    cor_sum_A[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
-	    cor_sum_D[l_A:l_A+b] += np.sum(np.copy(rfuncAB)**2, axis=1)
+		B1 = A1[:, l_B:l_B+c]
+		B2 = A2[:, l_B:l_B+c]
+		np.dot(A1.T, B2 / N, out=rfuncAB)
+		rfuncAB = l2(rfuncAB, N)
+		cor_sum1[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
+		if both: cor_sum2[l_B:l_B+c] += np.sum(rfuncAB, axis=0)
 
 	# Chunk to right of block
 	b0 = int(b)
@@ -234,52 +264,65 @@ def corSumVarBlocks(variants, block_left, c, m, N, ldsc_index):
 	end = md + 1 if md != m else md
 
 	for l_B in xrange(b0, end, c):
-	    # Update the block
-	    old_b = b
+		# Update the block
+		old_b = b
 
-	    b = block_sizes[l_B]
-	    if l_B > b0 and b > 0:
-	        # block_size can't increase more than c
-	        # block_size can't be less than c unless it is zero
-	        # Both of these things make sense
-	        A = np.hstack((A[:, old_b-b+c:old_b], B))
-	        l_A += old_b-b+c
-	    elif l_B == b0 and b > 0:
-	        A = A[:, b0-b:b0]
-	        l_A = b0-b
-	    elif b == 0:  # no SNPs to left in window, e.g., after a sequence gap
-	        A = np.array(()).reshape((N, 0))
-	        l_A = l_B
-	    if l_B == md:
-	        c = m - md
-	        rfuncAB = np.zeros((b, c))
-	        rfuncBB = np.zeros((c, c))
-	    if b != old_b:
-	        rfuncAB = np.zeros((b, c))
+		b = block_sizes[l_B]
+		if l_B > b0 and b > 0:
+			# block_size can't increase more than c
+			# block_size can't be less than c unless it is zero
+			# Both of these things make sense
+			A1 = np.hstack((A1[:, old_b-b+c:old_b], B1))
+			A2 = np.hstack((A2[:, old_b-b+c:old_b], B2))
+			l_A += old_b-b+c
+		elif l_B == b0 and b > 0:
+			A1 = A1[:, b0-b:b0]
+			A2 = A2[:, b0-b:b0]
+			l_A = b0-b
+		elif b == 0:  # no SNPs to left in window, e.g., after a sequence gap
+			A1 = np.array(()).reshape((N, 0))
+			A2 = np.array(()).reshape((N, 0))
+			l_A = l_B
+		if l_B == md:
+			c = m - md
+			rfuncAB = np.zeros((b, c))
+			rfuncBA = np.zeros((c, b))
+			rfuncBB = np.zeros((c, c))
+		if b != old_b:
+			rfuncAB = np.zeros((b, c))
+			rfuncBA = np.zeros((c, b))
 
-	    k = 0
-	    B = np.empty((N,c))
-	    while k < c:
+		k = 0
+		B1, B2 = np.empty((N,c)), np.empty((N,c))
+		while k < c:
 			variant = variants.next()
-			B[:,k] = nextSNP_add(variant, index=ldsc_index)
+			B1[:,k] = snp_getter1(variant, Xs, index=ldsc_index)
+			B2[:,k] = snp_getter2(variant, Xs, index=ldsc_index)
 			k += 1
 
-	    np.dot(A.T, B / N, out=rfuncAB)
-	    rfuncAB = l2(rfuncAB, N)
-	    
-	    cor_sum_A[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
-	    cor_sum_A[l_B:l_B+c] += np.sum(rfuncAB, axis=0)
-	    
-	    rfuncAB2 = np.copy(rfuncAB)**2
-	    cor_sum_D[l_A:l_A+b] += np.sum(rfuncAB2, axis=1)
-	    cor_sum_D[l_B:l_B+c] += np.sum(rfuncAB2, axis=0)
-	    
-	    np.dot(B.T, B / N, out=rfuncBB)
-	    rfuncBB = l2(rfuncBB, N)
-	    cor_sum_A[l_B:l_B+c] += np.sum(rfuncBB, axis=0)
-	    cor_sum_D[l_B:l_B+c] += np.sum(np.copy(rfuncBB)**2, axis=0)
+		# track_A.append(l_A)
+		# track_B.append(l_B)
 
-	return cor_sum_A, cor_sum_D
+		np.dot(A1.T, B2 / N, out=rfuncAB)
+		rfuncAB = l2(rfuncAB, N)
+		np.dot(B1.T, A2 / N, out=rfuncBA)
+		rfuncBA = l2(rfuncBA, N)
+		np.dot(B1.T, B2 / N, out=rfuncBB)
+		rfuncBB = l2(rfuncBB, N)
+
+		cor_sum1[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
+		cor_sum1[l_B:l_B+c] += np.sum(rfuncBA, axis=1)
+		cor_sum1[l_B:l_B+c] += np.sum(rfuncBB, axis=1)
+
+		if both:
+			cor_sum2[l_B:l_B+c] += np.sum(rfuncAB, axis=0)
+			cor_sum2[l_A:l_A+b] += np.sum(rfuncBA, axis=0)
+			cor_sum2[l_B:l_B+c] += np.sum(rfuncBB, axis=0)     
+
+	# print track_A
+	# print track_B
+
+	return (cor_sum1, cor_sum2) if both else cor_sum1
 
 def set_mutations_in_tree(tree_sequence, p_causal):
 	causal_sites = []
@@ -338,9 +381,9 @@ def run_gwas(tree_sequence, diploid_cases, diploid_controls, p_threshold, cc_maf
 	# Mutations are always in increasing order of position.
 	k = 0
 	for tree in tree_sequence.trees(tracked_leaves=cases):
-	    for mutation in tree.mutations():
-	        case_n_muts[k] = tree.get_num_tracked_leaves(mutation.node)
-	        k += 1
+		for mutation in tree.mutations():
+			case_n_muts[k] = tree.get_num_tracked_leaves(mutation.node)
+			k += 1
 
 	k = 0
 	for tree in tree_sequence.trees(tracked_leaves=controls):
@@ -364,16 +407,17 @@ def run_gwas(tree_sequence, diploid_cases, diploid_controls, p_threshold, cc_maf
 	return summary_stats
 
 def simulate_tree_and_betas(args, log):
-
 	h2_ldsc = np.zeros(args.n_sims, dtype=np.dtype([
 		('h2_A', float), ('int_A', float),
-		('h2_D', float), ('int_D', float),
+		('h2_D', float), ('int_D', float), 
+		('h2_E', float), ('int_E', float),
 		('h2_AC', float), ('int_AC', float)]))
 	h2_pcgc = np.zeros(args.n_sims, dtype=np.dtype([
 		('h2_A', float), ('h2_D', float), ('h2_AC', float)]))
 	h2_ldsc_int = np.zeros(args.n_sims, dtype=np.dtype([
 		('h2_A', float), ('int_A', float),
-		('h2_D', float), ('int_D', float),
+		('h2_D', float), ('int_D', float), 
+		('h2_E', float), ('int_E', float),
 		('h2_AC', float), ('int_AC', float)]))
 
 	if args.case_control:
@@ -402,6 +446,7 @@ def simulate_tree_and_betas(args, log):
 		rec_map_list = [None]*args.n_chr
 
 	if args.dominance is not True: args.h2_D = 0
+	if args.epistasis is not True: args.h2_E = 0
 	if args.gxe is not True: args.h2_AC = 0
 	if args.include_pop_strat is not True: args.s2 = 0
 
@@ -482,10 +527,10 @@ def simulate_tree_and_betas(args, log):
 				log.log('Determining sites > MAF cutoff {m}'.format(m=args.maf))
 
 				for tree in tree_sequence_list[chr].trees():
-				    for site in tree.sites():
-				        f = tree.get_num_leaves(site.mutations[0].node) / n_haps
-				        if f > args.maf and f < 1-args.maf:
-				            common_mutations.append(site)
+					for site in tree.sites():
+						f = tree.get_num_leaves(site.mutations[0].node) / n_haps
+						if f > args.maf and f < 1-args.maf:
+							common_mutations.append(site)
 
 				tree_sequence_list[chr] = tree_sequence_list[chr].copy(sites=common_mutations)
 
@@ -518,9 +563,20 @@ def simulate_tree_and_betas(args, log):
 					log.log('Writing genotyped information to disk')
 					write_trees(args.out, tree_sequence_list_geno[chr], chr, m_geno[chr], n_pops, N, sim, args.vcf, np.arange(N))
 
-			lN_A, lN_D = np.ones(m_geno_total), np.ones(m_geno_total)
-			if args.ldsc:
-				
+			# Now extract the special SNP from the special chromosome.
+			s = args.special_snp
+			Xs = None
+			if args.epistasis and s is None:
+				s = int(m[args.special_chr] / 2)
+			if s is not None:
+				if s > m[args.special_chr]:
+					raise ValueError("Index of special SNP out of bounds.")
+				Xs = next(islice(tree_sequence_list_geno[args.special_chr].variants(), s, None), None)
+				Xs = np.array(map(int, Xs.genotypes[0::2])) + np.array(map(int, Xs.genotypes[1::2]))
+
+			lN_AA, lN_AD, lN_AE, lN_DA, lN_DD, lN_DE, lN_EA, lN_ED, lN_EE = (np.ones(m_geno_total) for i in range(9))
+
+			if args.ldsc:				
 				# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
 				# sub-sampling here.
 				if args.ldscore_within_sample is False or args.case_control is False: # DEV: Currently we have no ascertainment for continuous traits coded up.
@@ -536,11 +592,43 @@ def simulate_tree_and_betas(args, log):
 						log.log('Determining LD scores in chromosome {chr}.'.format(chr=chr+1))
 						coords = np.array(xrange(m_geno[chr]))
 						block_left = getBlockLefts(coords, args.ld_wind_snps)
+
+						start_time = time.time()
 						
-						start_time=time.time()
-						lN_A[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_D[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, ldsc_index)
+						lN_AA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
+
+						AA_time = time.time()
+						# log.log('Finished LD_AA scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
+
+						lN_DD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
+
+						DD_time = time.time()
+						# log.log('Finished LD_DD scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
+
+						if args.epistasis:
+							lN_EE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
+							
+							EE_time = time.time()
+							# log.log('Finished LD_EE scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
+
+							lN_AD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_DA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
+							
+							AD_time = time.time() 
+							# log.log('Finished LD_AD, LD_DA scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
+
+							lN_AE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_EA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
+							
+							AE_time = time.time()
+							# log.log('Finished LD_AE, LD_EA scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
+
+							lN_DE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_ED[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
+							
+							DE_time = time.time()
+							# log.log('Finished LD_DE, LD_ED scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
+
 						time_elapsed = round(time.time()-start_time,2)
 						log.log('Time to evaluate LD scores: {T}'.format(T=pr.sec_to_str(time_elapsed)))
+
 						if args.write_l2:
 							if chr == 0:
 								mut_names, chr_vec = np.empty(0), np.empty(0)
@@ -551,11 +639,26 @@ def simulate_tree_and_betas(args, log):
 						# Write the LD scores to disk.
 						# Now, fix the chromosome number and the names of the mutations - this is as in the write_vcf function, so the 
 						# resultant mutation names are identical.
-						d={'CHR':chr_vec.astype(int), 'SNP': mut_names, 'L2_AA':lN_A, 'L2_DD':lN_D}
-						df=pd.DataFrame(d)
-						df = df[['CHR', 'SNP', 'L2_AA', 'L2_DD']]
-						l2_tsv = args.out + ".sim" + str(sim+1) + '.l2'
+						df = pd.DataFrame({'CHR':chr_vec.astype(int), 'SNP': mut_names})
+						if args.epistasis:
+							df['L2_AA'] = lN_AA
+							df['L2_AD'] = lN_AD
+							df['L2_AE'] = lN_AE
+							df['L2_DA'] = lN_DA
+							df['L2_DD'] = lN_DD
+							df['L2_DE'] = lN_DE
+							df['L2_EA'] = lN_EA
+							df['L2_ED'] = lN_ED
+							df['L2_EE'] = lN_EE
+						else:
+							df['L2_AA'] = lN_AA
+							df['L2_DD'] = lN_DD
+						l2_tsv = args.out + '.sim' + str(sim+1) + '.l2'
 						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
+						# pd.set_option('display.max_rows', 200)
+    		# 			log.log('\nSummary of LD Scores in {F}'.format(F=out_fname))
+    		# 			t = df.ix[:,2:].describe()
+    		# 			log.log( t.ix[1:,:] )
 
 		# Now, run through the chromosomes in this collection of trees, 
 		# and determine the number of causal variants for each chromosome.
@@ -572,8 +675,7 @@ def simulate_tree_and_betas(args, log):
 				len(map(int, [x/2 for x in pop_leaves[0::2]]))
 				y[map(int, [x/2 for x in pop_leaves[0::2]])] += alpha[pops]
 
-		for chr in xrange(args.n_chr):
-			
+		for chr in xrange(args.n_chr):			
 			log.log('Picking causal variants and determining effect sizes in chromosome {chr}'.format(chr=chr+1))
 			
 			if (((1 + int(args.dominance) + int(args.gxe)) * args.p_causal) < 1) or args.same_causal_sites: # If the number of runs through the data is less than 1, run this speedup.
@@ -584,6 +686,10 @@ def simulate_tree_and_betas(args, log):
 				if args.same_causal_sites is False:
 					tree_sequence_pheno_D, m_causal_D = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 					if args.h2_D > 0: log.log('Picked {m} dominance causal variants out of {mc}'.format(m=m_causal_D, mc=m[chr]))
+
+					tree_sequence_pheno_E, m_causal_E = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+					if args.h2_E > 0: log.log('Picked {m} epistasis causal variants out of {mc}'.format(m=m_causal_E, mc=m[chr]))
+
 					tree_sequence_pheno_AC, m_causal_AC = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 					if args.h2_AC > 0: log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal_AC, mc=m[chr]))
 
@@ -592,20 +698,33 @@ def simulate_tree_and_betas(args, log):
 						# Get the phenotypes.
 						k = 0
 						log.log('Determining phenotype data: additive.')
+						
 						for variant in progress(args.progress_bars, tree_sequence_pheno_A.variants(), total=m_causal_A): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-							X_A = nextSNP_add(variant)
+							X_A = nextSNP_add(variant, Xs)
 							# Effect size on the phenotype.
 							y += X_A * beta_A[k]
 							k += 1
 
-					if args.dominance and args.h2_D >0:
+					if args.dominance and args.h2_D > 0:
 						beta_D = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal_D)
 						k = 0
 						log.log('Determining phenotype data: dominance.')
+						
 						for variant in progress(args.progress_bars, tree_sequence_pheno_D.variants(), total=m_causal_D): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-							X_A, X_D = nextSNP(variant)
+							X_D = nextSNP_dom(variant, Xs)
 							# Effect size on the phenotype.
 							y += X_D * beta_D[k]
+							k += 1
+
+					if args.epistasis and args.h2_E > 0:
+						beta_E = np.random.normal(loc=0, scale=np.sqrt(args.h2_E / (m_total * args.p_causal)), size=m_causal_E)
+						k = 0
+						log.log('Determining phenotype data: epistasis.')
+						
+						for variant in progress(args.progress_bars, tree_sequence_pheno_E.variants(), total=m_causal_E): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
+							X_E = nextSNP_epi(variant, Xs)
+							# Effect size on the phenotype.
+							y += X_E * beta_E[k]
 							k += 1
 
 					if args.gxe and args.h2_AC > 0:
@@ -619,12 +738,15 @@ def simulate_tree_and_betas(args, log):
 							y += C * X_A * beta_AC[k]
 							k += 1
 				else:
-					beta_A, beta_D, beta_AC = np.zeros(m_causal_A), np.zeros(m_causal_A), np.zeros(m_causal_A)  
+					beta_A, beta_D, beta_E, beta_AC = np.zeros(m_causal_A), np.zeros(m_causal_A), np.zeros(m_causal_A), np.zeros(m_causal_A)  
 					if args.h2_A > 0:
 						beta_A = np.random.normal(loc=0, scale=np.sqrt(args.h2_A / (m_total * args.p_causal)), size=m_causal_A)
 					
 					if args.dominance and args.h2_D > 0:
 						beta_D = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal_A)
+
+					if args.epistasis and args.h2_E > 0:
+						beta_E = np.random.normal(loc=0, scale=np.sqrt(args.h2_E / (m_total * args.p_causal)), size=m_causal_A)
 
 					if args.gxe and args.h2_AC > 0:
 						beta_AC = np.random.normal(loc=0, scale=np.sqrt(args.h2_AC / (m_total * args.p_causal)), size=m_causal_A)
@@ -633,14 +755,14 @@ def simulate_tree_and_betas(args, log):
 					log.log('Determining phenotype data')
 					# Note that we use just one tree_sequence here, because the causal sites are the same in this portion of the code.
 					for variant in progress(args.progress_bars, tree_sequence_pheno_A.variants(), total=m_causal_A): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-						X_A, X_D = nextSNP(variant)
+						X_A, X_D, X_E = nextSNP(variant, Xs)
 						# Effect size on the phenotype.
-						y += X_A * beta_A[k] + X_D * beta_D[k] + C * X_A * beta_AC[k]
+						y += X_A * beta_A[k] + X_D * beta_D[k] + X_E * beta_E[k] + C * X_A * beta_AC[k]
 						k += 1
 
 			else:
 				m_causal = int(m[chr] * args.p_causal)
-				beta_A, beta_D, beta_AC = np.zeros(m[chr]), np.zeros(m[chr]), np.zeros(m[chr])
+				beta_A, beta_D, beta_E, beta_AC = [np.zeros(m[chr]) for i in range(4)]
 				beta_A_causal_index = random.sample(xrange(m[chr]), m_causal)
 				log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
 
@@ -653,6 +775,12 @@ def simulate_tree_and_betas(args, log):
 					if args.h2_D > 0:
 						beta_D[beta_D_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal)
 
+				if args.epistasis:
+					beta_E, beta_E_causal_index = np.zeros(m[chr]), random.sample(xrange(m[chr]), m_causal)
+					log.log('Picked {m} epistasis causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
+					if args.h2_E > 0:
+						beta_E[beta_E_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_E / (m_total * args.p_causal)), size=m_causal)
+
 				if args.gxe:
 					beta_AC, beta_AC_causal_index = np.zeros(m[chr]), random.sample(xrange(m[chr]), mc=m_causal)
 					log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
@@ -664,20 +792,20 @@ def simulate_tree_and_betas(args, log):
 				log.log('Determining phenotype data.')
 
 				for variant in progress(args.progress_bars, tree_sequence_list[chr].variants(), total=m[chr]): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-					X_A, X_D = nextSNP(variant)
+					X_A, X_D, X_E = nextSNP(variant, Xs)
 					# Effect size on the phenotype.
-					y += X_A * beta_A[k] + X_D * beta_D[k] + X_A * C * beta_AC[k]
+					y += X_A * beta_A[k] + X_D * beta_D[k] + X_E * beta_E[k] + X_A * C * beta_AC[k]
 					k += 1
 		
 		# Add noise to the y.
-		y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_AC+args.s2)), size=N)
+		y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_E+args.h2_AC+args.s2)), size=N)
 		# Finally, normalise.
 		y = (y - np.mean(y)) / np.std(y)
 		time_elapsed = round(time.time()-start_time,2)
 		log.log('Time to evaluate phenotype data: {T}'.format(T=pr.sec_to_str(time_elapsed)))
 
 		# Initialise the chi squared statistics.
-		chisq_A, chisq_D, chisq_AC = np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1))
+		chisq_A, chisq_D, chisq_E, chisq_AC = np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1))
 
 		if args.case_control:
 			log.log("Running case-control simulation.")
@@ -694,13 +822,14 @@ def simulate_tree_and_betas(args, log):
 				k = 0
 				for chr in xrange(args.n_chr):
 					for variant in progress(args.progress_bars, tree_sequence_list_geno[chr].variants(), total=m[chr]):
-						X_A, X_D = nextSNP(variant, index = index)
+						X_A, X_D, X_E = nextSNP(variant, Xs, index = index)
 						chisq_A[k] = sm.Logit(y_cc, sm.add_constant(X_A)).fit(disp=0).llr
 						chisq_D[k] = sm.Logit(y_cc, sm.add_constant(X_D)).fit(disp=0).llr
+						chisq_E[k] = sm.Logit(y_cc, sm.add_constant(X_E)).fit(disp=0).llr
 						chisq_AC[k] = sm.Logit(y_cc, sm.add_constant(C_sim * X_A)).fit(disp=0).llr
 						k += 1
 
-		if ( ((args.case_control is False) or (args.case_control is True and args.linear is True)) and args.ldsc is True ):
+		if (((args.case_control is False) or (args.case_control is True and args.linear is True)) and args.ldsc is True):
 			if args.case_control:
 				log.log("Warning: running linear regression for case-control.")
 				y = (y_cc - np.mean(y_cc)) / np.std(y_cc)
@@ -716,10 +845,11 @@ def simulate_tree_and_betas(args, log):
 			for chr in xrange(args.n_chr):
 				log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
 				for variant in tree_sequence_list_geno[chr].variants():
-					X_A, X_D = nextSNP(variant, index=index)
+					X_A, X_D, X_E = nextSNP(variant, Xs, index=index)
 					# Then sum to get the effect size on the phenotype.
 					chisq_A[k] = np.dot(y.reshape(1,n), X_A)**2 / n
 					chisq_D[k] = np.dot(y.reshape(1,n), X_D)**2 / n
+					chisq_E[k] = np.dot(y.reshape(1,n), X_E)**2 / n
 					chisq_AC[k] = np.dot(y.reshape(1,n), C_sim * X_A)**2 / n
 					k += 1
 
@@ -740,7 +870,7 @@ def simulate_tree_and_betas(args, log):
 			else:
 				sample_ID = np.arange(N)
 			df_pheno=pd.DataFrame({'sample_ID':sample_ID, 'phenotype':y})
-			df_pheno.to_csv(args.out + ".sim" + str(sim+1) + '.pheno.tsv', sep='\t', header=True, index=False)
+			df_pheno.to_csv(args.out + '.sim' + str(sim+1) + '.pheno.tsv', sep='\t', header=True, index=False)
 
 
 		# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
@@ -765,18 +895,6 @@ def simulate_tree_and_betas(args, log):
 					time_elapsed = round(time.time()-start_time,2)
 					log.log('Time to evaluate LD scores in chromosome {chr}: {T}'.format(T=pr.sec_to_str(time_elapsed)))
 
-				if args.write_l2:
-						# Write the LD scores to disk.
-						# Now, fix the chromosome number and the names of the mutations - this is as in the write_vcf function, so the 
-						# resultant mutation names are identical.
-						mut_names=np.core.defchararray.add('rs.' + str(chr+1) + ".", np.arange(1,m_geno[chr]+1).astype('str'))
-						chr_vec=np.tile(chr+1, m)
-						d={'CHR':chr_vec, 'SNP': mut_names, 'L2_AA':lN_A, 'L2_DD':lN_D}
-						df=pd.DataFrame(d)
-						df = df[['CHR', 'SNP', 'L2_AA', 'L2_DD']]
-						l2_tsv = args.out + ".sim" + str(sim+1) + '.l2'
-						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
-
 			# Intercept options for the regression.
 			intercept_h2 = [None]
 			if args.free_and_no_intercept: intercept_h2 = [None, 1]
@@ -784,22 +902,32 @@ def simulate_tree_and_betas(args, log):
 
 			# Run the regressions
 			log.log('Running LD score regressions.')
-			hsqhat_A, hsqhat_D, hsqhat_AC = [], [], []
+			hsqhat_A, hsqhat_D, hsqhat_E, hsqhat_AC = [], [], [], []
 			for i in xrange(len(intercept_h2)):
-				hsqhat_A.append(reg.Hsq(chisq_A,
-					lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
-					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-					n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
+				if args.epistasis:
+					y = np.concatenate((chisq_A, chisq_D, chisq_E), axis=0)
+					x = np.concatenate((lN_AA, lN_DA, lN_EA, lN_AD, lN_DD, lN_ED, lN_AE, lN_DE, lN_EE))[None,:].reshape((3,3*m_geno_total)).T
+					w = np.concatenate((lN_EA, lN_ED, lN_EE))[None,:].T
 
-				hsqhat_D.append(reg.Hsq(chisq_D,
-					lN_D.reshape((m_geno_total,1)), lN_D.reshape((m_geno_total,1)),
+					hsqhat_E.append(reg.Hsq(y, x, w,
+					np.tile(n,3*m_geno_total).reshape((3*m_geno_total,1)), np.tile(m_geno_total,3).reshape((1,3)),
+					n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+				else:
+					hsqhat_A.append(reg.Hsq(chisq_A,
+					lN_AA.reshape((m_geno_total,1)), lN_AA.reshape((m_geno_total,1)),
 					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-					n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
+					n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+					hsqhat_D.append(reg.Hsq(chisq_D,
+					lN_DD.reshape((m_geno_total,1)), lN_DD.reshape((m_geno_total,1)),
+					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+					n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
 
 				hsqhat_AC.append(reg.Hsq(chisq_AC,
-					lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
-					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-					n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
+				lN_AA.reshape((m_geno_total,1)), lN_AA.reshape((m_geno_total,1)),
+				np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+				n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
 
 		if args.case_control:
 			study_prevalence = n_cases / n
@@ -834,8 +962,12 @@ def simulate_tree_and_betas(args, log):
 			h2_pcgc['h2_AC'][sim] = (np.sum(h2_ADAC) - np.sum(h2_AD)) * scaling
 
 		if args.ldsc is True:
-			h2_ldsc['h2_A'][sim], h2_ldsc['h2_D'][sim], h2_ldsc['h2_AC'][sim] = np.array([hsqhat_A[0].tot, hsqhat_D[0].tot, hsqhat_AC[0].tot]) * scaling
-			h2_ldsc['int_A'][sim], h2_ldsc['int_D'][sim], h2_ldsc['int_AC'][sim] = hsqhat_A[0].intercept, hsqhat_D[0].intercept, hsqhat_AC[0].intercept
+			if args.epistasis:
+				h2_ldsc['h2_A'][sim], h2_ldsc['h2_D'][sim], h2_ldsc['h2_E'][sim], h2_ldsc['h2_AC'][sim] = np.array([hsqhat_E[0].cat[0,0], hsqhat_E[0].cat[0,1], hsqhat_E[0].cat[0,2], hsqhat_AC[0].tot]) * scaling
+				h2_ldsc['int_A'][sim], h2_ldsc['int_D'][sim], h2_ldsc['int_E'][sim], h2_ldsc['int_AC'][sim] = hsqhat_E[0].intercept, hsqhat_E[0].intercept, hsqhat_E[0].intercept, hsqhat_AC[0].intercept
+			else:
+				h2_ldsc['h2_A'][sim], h2_ldsc['h2_D'][sim], h2_ldsc['h2_AC'][sim] = np.array([hsqhat_A[0].tot, hsqhat_D[0].tot, hsqhat_AC[0].tot]) * scaling
+				h2_ldsc['int_A'][sim], h2_ldsc['int_D'][sim], h2_ldsc['int_AC'][sim] = hsqhat_A[0].intercept, hsqhat_D[0].intercept, hsqhat_AC[0].intercept
 
 			if args.free_and_no_intercept:
 				h2_ldsc_int['h2_A'][sim], h2_ldsc_int['h2_D'][sim], h2_ldsc_int['h2_AC'][sim] = np.array([hsqhat_A[1].tot, hsqhat_D[1].tot, hsqhat_AC[1].tot]) * scaling
@@ -845,23 +977,29 @@ def simulate_tree_and_betas(args, log):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--out', default='msprimesim', type=str,
-    help='Output filename prefix. This will be an output of heritability estimates'
-    ' across the n_sims.')
+	help='Output filename prefix. This will be an output of heritability estimates'
+	' across the n_sims.')
 parser.add_argument('--h2_A', default=0.3, type=float,
 	help='Additive heritability contribution [Default: 0.3].')
 parser.add_argument('--h2_D', default=0.1, type=float,
 	help='Dominance heritability contribution [Default: 0.1].')
+parser.add_argument('--h2_E', default=0.1, type=float,
+	help='Epistasis heritability contribution [Default: 0.1].')
 parser.add_argument('--h2_AC', default=0.2, type=float,
 	help='Dominance heritability contribution [Default: 0.2].')
 parser.add_argument('--p-causal', default=1, type=float,
 	help='Proportion of SNPs that are causal [Default: 1].')
+parser.add_argument('--special-snp', default=None, type=float,
+	help='Index of special SNP for epistasis.')
+parser.add_argument('--special-chr', default=0, type=float,
+	help='Index of special chromosome for epistasis.')
 # Filtering / Data Management for LD Score
 parser.add_argument('--ld-wind-snps', default=1000, type=int,
-    help='Specify the window size to be used for estimating LD Scores in units of '
-    '# of SNPs [Default: 1000].')
+	help='Specify the window size to be used for estimating LD Scores in units of '
+	'# of SNPs [Default: 1000].')
 # Flags you should almost never use
 parser.add_argument('--chunk-size', default=50, type=int,
-    help='Chunk size for LD Score calculation. Use the default [Default: 50].')
+	help='Chunk size for LD Score calculation. Use the default [Default: 50].')
 parser.add_argument('--n', default=40000, type=int,
 	help='Number of individuals in the sampled genotypes [Default: 40,000].')
 parser.add_argument('--m', default=1000000, type=int,
@@ -869,18 +1007,18 @@ parser.add_argument('--m', default=1000000, type=int,
 parser.add_argument('--Ne', default=10000, type=int,
 	help='Effective population size [Default: 10,000].')
 parser.add_argument('--sim-type', default='standard', type=str,
-    help='Type of simulation to run. Currently recognises "standard",'
-    '"out-of-africa" and "out-of-africa-all-pops" [Default: standard]')
+	help='Type of simulation to run. Currently recognises "standard",'
+	'"out-of-africa" and "out-of-africa-all-pops" [Default: standard]')
 parser.add_argument('--maf', default=0.05, type=float,
-    help='The minor allele frequency cut-off [Default: 0.05].')
+	help='The minor allele frequency cut-off [Default: 0.05].')
 parser.add_argument('--rec', default=2e-8, type=float,
-    help='Recombination rate across the region [Default: 2e-8].')
+	help='Recombination rate across the region [Default: 2e-8].')
 parser.add_argument('--mut', default=2e-8, type=float,
 	help='Mutation rate across the region [Default: 2e-8].')
 parser.add_argument('--no-intercept', action='store_true',
-    help = 'This constrains the LD Score regression intercept to equal 1.')
+	help = 'This constrains the LD Score regression intercept to equal 1.')
 parser.add_argument('--free-and-no-intercept', action='store_true',
-    help = 'This runs both a free and a constrained intercept equal to 1.')
+	help = 'This runs both a free and a constrained intercept equal to 1.')
 parser.add_argument('--n-sims', default=1, type=int,
 	help='Number of msprime simulations to run [Default: 1].')
 parser.add_argument('--n-blocks', default=200, type=int,
@@ -899,6 +1037,8 @@ parser.add_argument('--pcgc', default=False, action='store_true',
 	help='Do you want to estimate heritability using PCGC too? Warning: slow and memory intensive.')
 parser.add_argument('--dominance', default=False, action='store_true',
 	help='Do you want to include dominance simulation and estimation?')
+parser.add_argument('--epistasis', default=False, action='store_true',
+	help='Do you want to include epistasis simulation and estimation?')
 parser.add_argument('--gxe', default=False, action='store_true',
 	help='Do you want to include a gene by environment interaction simulation and estimation?')
 parser.add_argument('--write-trees', default=False, action='store_true',
@@ -947,6 +1087,7 @@ parser.add_argument('--prop-EUR', default=0.75, type=float,
 parser.add_argument('--write-l2', default=False, action='store_true', 
 	help='Do you want to write the LD scores for this simulation to disk?')
 
+
 if __name__ == '__main__':
 
 	args = parser.parse_args()
@@ -979,8 +1120,9 @@ if __name__ == '__main__':
 		df = pd.DataFrame.from_records(np.c_[
 			h2_ldsc['h2_A'], h2_ldsc['int_A'],
 			h2_ldsc['h2_D'], h2_ldsc['int_D'],
+			h2_ldsc['h2_E'], h2_ldsc['int_E'],
 			h2_ldsc['h2_AC'], h2_ldsc['int_AC']])
-		df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_AC', 'int_AC']
+		df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_E', 'int_E', 'h2_AC', 'int_AC']
 		df.to_csv(out_fname, sep='\t', header=True, index=False, float_format='%.3f')
 
 		if args.free_and_no_intercept:
