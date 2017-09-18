@@ -69,7 +69,7 @@ def simulate_tree_and_betas(args, log):
 
 		# Note that we pass the tree_sequence_list as potentially non-genotyped SNPs affect phenotype.
 		y, C = ph.get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log)
-
+		print y[:5]
 		# Need to alter this function - splitting further.
 		if args.ldsc:
 			if args.case_control:

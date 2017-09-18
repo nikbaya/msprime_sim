@@ -54,7 +54,7 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 
 	C = np.random.normal(loc=0, scale=1, size=N)
 	C = (C - np.mean(C)) / np.std(C)
-
+	
 	if args.include_pop_strat is True and args.s2 > 0:
 		# Get the means for the populations.
 		alpha = np.random.normal(loc=0, scale=np.sqrt(args.s2), size=n_pops)

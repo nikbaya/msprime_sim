@@ -571,7 +571,9 @@ def simulate_tree_and_betas(args, log):
 		if (sim == 0) or (args.fix_genetics is False):
 			lN_A, lN_D = np.ones(m_geno_total), np.ones(m_geno_total)
 			if args.ldsc:
-				
+				if args.debug:
+					random.seed(1)
+					np.random.seed(1)
 				# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
 				# sub-sampling here.
 				if args.ldscore_within_sample is False or args.case_control is False: # DEV: Currently we have no ascertainment for continuous traits coded up.
@@ -582,6 +584,7 @@ def simulate_tree_and_betas(args, log):
 						log.log('Using a subset of individuals from the sampled tree to determine LD scores - LD score sampling proportion: {ld}'.format(ld=args.ldscore_sampling_prop))
 						n_ldsc = int(N*args.ldscore_sampling_prop)
 						ldsc_index = random.sample(xrange(N), n_ldsc)
+						print ldsc_index[:5]
 
 					for chr in xrange(args.n_chr):
 						log.log('Determining LD scores in chromosome {chr}.'.format(chr=chr+1))
@@ -607,7 +610,8 @@ def simulate_tree_and_betas(args, log):
 						df = df[['CHR', 'SNP', 'L2_AA', 'L2_DD']]
 						l2_tsv = args.out + ".sim" + str(sim+1) + '.l2'
 						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
-			log.log(lN_A)
+			log.log(lN_A[:5])
+			log.log(lN_D[:5])
 		# Now, run through the chromosomes in this collection of trees, 
 		# and determine the number of causal variants for each chromosome.
 		start_time=time.time()
@@ -712,7 +716,7 @@ def simulate_tree_and_betas(args, log):
 						beta_D[beta_D_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal)
 
 				if args.gxe:
-					beta_AC, beta_AC_causal_index = np.zeros(m[chr]), random.sample(xrange(m[chr]), mc=m_causal)
+					beta_AC, beta_AC_causal_index = np.zeros(m[chr]), random.sample(xrange(m[chr]), m_causal)
 					log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
 					if args.h2_AC > 0:
 						beta_AC[beta_AC_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_AC / (m_total * args.p_causal)), size=m_causal)
@@ -731,6 +735,7 @@ def simulate_tree_and_betas(args, log):
 		y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_AC+args.s2)), size=N)
 		# Finally, normalise.
 		y = (y - np.mean(y)) / np.std(y)
+		print y[:5]
 		time_elapsed = round(time.time()-start_time,2)
 		log.log('Time to evaluate phenotype data: {T}'.format(T=pr.sec_to_str(time_elapsed)))
 
@@ -898,6 +903,7 @@ def simulate_tree_and_betas(args, log):
 				h2_ldsc_int['h2_A'][sim], h2_ldsc_int['h2_D'][sim], h2_ldsc_int['h2_AC'][sim] = np.array([hsqhat_A[1].tot, hsqhat_D[1].tot, hsqhat_AC[1].tot]) * scaling
 				h2_ldsc_int['int_A'][sim], h2_ldsc_int['int_D'][sim], h2_ldsc_int['int_AC'][sim] = hsqhat_A[1].intercept, hsqhat_D[1].intercept, hsqhat_AC[1].intercept
 	print h2_ldsc
+	print h2_ldsc_int
 	print h2_pcgc
 	return h2_ldsc, h2_pcgc, h2_ldsc_int
 
