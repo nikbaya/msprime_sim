@@ -983,8 +983,8 @@ parser.add_argument('--h2_A', default=0.3, type=float,
 	help='Additive heritability contribution [Default: 0.3].')
 parser.add_argument('--h2_D', default=0.1, type=float,
 	help='Dominance heritability contribution [Default: 0.1].')
-parser.add_argument('--h2_E', default=0.1, type=float,
-	help='Epistasis heritability contribution [Default: 0.1].')
+parser.add_argument('--h2_E', default=0, type=float,
+	help='Epistasis heritability contribution [Default: 0].')
 parser.add_argument('--h2_AC', default=0.2, type=float,
 	help='Dominance heritability contribution [Default: 0.2].')
 parser.add_argument('--p-causal', default=1, type=float,
