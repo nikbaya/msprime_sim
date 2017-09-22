@@ -174,10 +174,9 @@ def nextSNP_epi(variant, Xs, index=None):
 	return X_E
 
 # def obtain_K(variants, K_A, K_D, K_AC, C, c, m, n, progress_bars, index):
-
 # 	# Number of chunks of length c in m sites.
 # 	n_c = np.floor(m/c).astype(int)
-# 	X_A, X_D = np.empty((n, c)), np.empty((n, c))
+# 	X_A, X_D, X_E = np.empty((n, c)), np.empty((n, c)), np.empty((n, c))
 # 	C_mat = np.repeat(C, c).reshape((n, c))
 
 # 	for i in progress(progress_bars, xrange(n_c), total=n_c):
@@ -185,30 +184,32 @@ def nextSNP_epi(variant, Xs, index=None):
 
 # 		while k < c:
 # 			variant = variants.next()
-# 			X_A[:,k], X_D[:,k] = nextSNP(variant, index)
+# 			X_A[:,k], X_D[:,k], X_E[:,k] = nextSNP(variant, index)
 # 			k += 1
 		
 # 		K_A += np.dot(X_A, X_A.T)
 # 		K_D += np.dot(X_D, X_D.T)
+# 		K_E += np.dot(X_E, X_E.T)
 # 		K_AC += np.dot(C_mat * X_A, (C_mat * X_A).T)
 		
 # 	# The final chunk.
 # 	if (n_c * c) < m:
 # 		k = 0
 # 		c = m - (n_c * c)
-# 		X_A, X_D = np.empty((n, c)), np.empty((n, c))
+# 		X_A, X_D, X_E = np.empty((n, c)), np.empty((n, c)), np.empty((n, c))
 # 		C_mat = np.repeat(C, c).reshape((n, c))
 
 # 		while k < c:
 # 			variant = variants.next()
-# 			X_A[:,k], X_D[:,k] = nextSNP(variant, index)
+# 			X_A[:,k], X_D[:,k], X_E[:,k] = nextSNP(variant, index)
 # 			k += 1
 
 # 		K_A += np.dot(X_A, X_A.T)
 # 		K_D += np.dot(X_D, X_D.T)
+# 		K_E += np.dot(X_E, X_E.T)
 # 		K_AC += np.dot(C_mat * X_A, (C_mat * X_A).T)
 
-# 	return K_A, K_D, K_AC
+# 	return K_A, K_D, K_E, K_AC
 
 # m := number of SNPs
 # N := number of individuals
@@ -300,9 +301,6 @@ def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2,
 			B2[:,k] = snp_getter2(variant, Xs, index=ldsc_index)
 			k += 1
 
-		# track_A.append(l_A)
-		# track_B.append(l_B)
-
 		np.dot(A1.T, B2 / N, out=rfuncAB)
 		rfuncAB = l2(rfuncAB, N)
 		np.dot(B1.T, A2 / N, out=rfuncBA)
@@ -318,9 +316,6 @@ def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2,
 			cor_sum2[l_B:l_B+c] += np.sum(rfuncAB, axis=0)
 			cor_sum2[l_A:l_A+b] += np.sum(rfuncBA, axis=0)
 			cor_sum2[l_B:l_B+c] += np.sum(rfuncBB, axis=0)     
-
-	# print track_A
-	# print track_B
 
 	return (cor_sum1, cor_sum2) if both else cor_sum1
 
@@ -598,33 +593,33 @@ def simulate_tree_and_betas(args, log):
 						lN_AA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
 
 						AA_time = time.time()
-						# log.log('Finished LD_AA scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
+						log.log('Finished LD_AA scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
 
 						lN_DD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
 
 						DD_time = time.time()
-						# log.log('Finished LD_DD scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
+						log.log('Finished LD_DD scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
 
 						if args.epistasis:
 							lN_EE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
 							
 							EE_time = time.time()
-							# log.log('Finished LD_EE scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
+							log.log('Finished LD_EE scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
 
 							lN_AD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_DA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
 							
 							AD_time = time.time() 
-							# log.log('Finished LD_AD, LD_DA scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
+							log.log('Finished LD_AD, LD_DA scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
 
 							lN_AE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_EA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
 							
 							AE_time = time.time()
-							# log.log('Finished LD_AE, LD_EA scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
+							log.log('Finished LD_AE, LD_EA scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
 
 							lN_DE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_ED[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
 							
 							DE_time = time.time()
-							# log.log('Finished LD_DE, LD_ED scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
+							log.log('Finished LD_DE, LD_ED scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
 
 						time_elapsed = round(time.time()-start_time,2)
 						log.log('Time to evaluate LD scores: {T}'.format(T=pr.sec_to_str(time_elapsed)))
@@ -655,10 +650,10 @@ def simulate_tree_and_betas(args, log):
 							df['L2_DD'] = lN_DD
 						l2_tsv = args.out + '.sim' + str(sim+1) + '.l2'
 						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
-						# pd.set_option('display.max_rows', 200)
-    		# 			log.log('\nSummary of LD Scores in {F}'.format(F=out_fname))
-    		# 			t = df.ix[:,2:].describe()
-    		# 			log.log( t.ix[1:,:] )
+						pd.set_option('display.max_rows', 200)
+    					log.log('\nSummary of LD Scores in {F}'.format(F=out_fname))
+    					t = df.ix[:,2:].describe()
+    					log.log( t.ix[1:,:] )
 
 		# Now, run through the chromosomes in this collection of trees, 
 		# and determine the number of causal variants for each chromosome.
@@ -944,13 +939,13 @@ def simulate_tree_and_betas(args, log):
 
 			if (sim == 0) or (args.fix_genetics is False) or (args.case_control):
 				where = np.triu_indices(n, k=1)
-				K_A, K_D, K_AC = np.zeros((n, n)), np.zeros((n, n)), np.zeros((n, n))
+				K_A, K_D, K_E, K_AC = np.zeros((n, n)), np.zeros((n, n)), np.zeros((n, n))
 				for chr in xrange(args.n_chr):
-					log.log('Determining K_A and K_D in chromosome {chr}'.format(chr=chr+1))
-					K_A, K_D, K_AC = obtain_K(tree_sequence_list_geno[chr].variants(),
-						K_A, K_D, K_AC, C_sim, args.chunk_size, m[chr], n,
+					log.log('Determining K_A, K_D, and K_E in chromosome {chr}'.format(chr=chr+1))
+					K_A, K_D, K_E, K_AC = obtain_K(tree_sequence_list_geno[chr].variants(),
+						K_A, K_D, K_E, K_AC, C_sim, args.chunk_size, m[chr], n,
 						args.progress_bars, index)
-					log.log('Time to evaluate K_A and K_D in chromosome {chr}: {T}'.format(chr=chr+1, T=pr.sec_to_str(time_elapsed)))
+					log.log('Time to evaluate K_A, K_D, and K_E in chromosome {chr}: {T}'.format(chr=chr+1, T=pr.sec_to_str(time_elapsed)))
 					
 			log.log('Running PCGC regressions')
 			h2_A = sm.OLS(P[where], exog = K_A[where] / m_geno_total).fit().params
