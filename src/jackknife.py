@@ -112,7 +112,7 @@ class Jackknife(object):
 
         Parameters
         ----------
-        pseudovalues : np.matrix pf floats with shape (n_blocks, p)
+        pseudovalues : np.matrix of floats with shape (n_blocks, p)
 
         Returns
         -------
