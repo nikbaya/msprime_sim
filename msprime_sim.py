@@ -128,12 +128,12 @@ def standardize(X):
 	X_D = np.copy(X)
 	X_D[X_D == 2] = 0
 
-	G = np.concatenate((np.ones((n, 1)), X_A[:, None], X_D[:, None]), axis = 1)
+	G = np.concatenate((np.ones((n, 1)), X_A[:, None], X_D[:, None]), axis=1)
 	X_D = math.sqrt(n) * np.linalg.qr(G)[0][:,-1]
 	
 	return X_A, X_D
 
-def nextSNP(variant, Xs, index=None):
+def nextSNP(variant, Xs=None, index=None):
 	if index is None:
 		var_tmp = np.array(map(int, variant.genotypes[0::2])) + np.array(map(int, variant.genotypes[1::2]))
 	else:
@@ -152,16 +152,16 @@ def nextSNP(variant, Xs, index=None):
 
 	return X_A, X_D, X_E
 
-def nextSNP_add(variant, Xs, index=None):
-	X_A, X_D, X_E = nextSNP(variant, Xs, index=None)
+def nextSNP_add(variant, Xs=None, index=None):
+	X_A, X_D, X_E = nextSNP(variant, Xs=Xs, index=index)
 	return X_A
 
-def nextSNP_dom(variant, Xs, index=None):
-	X_A, X_D, X_E = nextSNP(variant, Xs, index=None)
+def nextSNP_dom(variant, Xs=None, index=None):
+	X_A, X_D, X_E = nextSNP(variant, Xs=Xs, index=index)
 	return X_D
 
-def nextSNP_epi(variant, Xs, index=None):
-	X_A, X_D, X_E = nextSNP(variant, Xs, index=None)
+def nextSNP_epi(variant, Xs=None, index=None):
+	X_A, X_D, X_E = nextSNP(variant, Xs=Xs, index=index)
 	return X_E
 
 def obtain_K(variants, K_A, K_D, K_AC, C, c, m, n, progress_bars, index):
@@ -205,8 +205,6 @@ def obtain_K(variants, K_A, K_D, K_AC, C, c, m, n, progress_bars, index):
 # m := number of SNPs
 # N := number of individuals
 def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2, both, ldsc_index):
-	track_A = []
-	track_B = []
 	block_sizes = np.array(np.arange(m) - block_left)
 	block_sizes = (np.ceil(block_sizes / c) * c).astype(int)
 	cor_sum1, cor_sum2 = np.zeros(m), np.zeros(m)
@@ -231,9 +229,9 @@ def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2,
 	while k < b:
 		variant = variants.next()
 		
-		A1[:,k] = snp_getter1(variant, Xs, index=ldsc_index)
+		A1[:,k] = snp_getter1(variant, Xs=Xs, index=ldsc_index)
 		# print variant.index
-		A2[:,k] = snp_getter2(variant, Xs, index=ldsc_index)
+		A2[:,k] = snp_getter2(variant, Xs=Xs, index=ldsc_index)
 		# print variant.index
 		k += 1
 
@@ -288,8 +286,8 @@ def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2,
 		B1, B2 = np.empty((N,c)), np.empty((N,c))
 		while k < c:
 			variant = variants.next()
-			B1[:,k] = snp_getter1(variant, Xs, index=ldsc_index)
-			B2[:,k] = snp_getter2(variant, Xs, index=ldsc_index)
+			B1[:,k] = snp_getter1(variant, Xs=Xs, index=ldsc_index)
+			B2[:,k] = snp_getter2(variant, Xs=Xs, index=ldsc_index)
 			k += 1
 
 		np.dot(A1.T, B2 / N, out=rfuncAB)
@@ -312,12 +310,16 @@ def corSumVarBlocks(variants, block_left, c, m, N, Xs, snp_getter1, snp_getter2,
 
 def set_mutations_in_tree(tree_sequence, p_causal):
 	causal_sites = []
+	causal_indices = []
+	site_index = 0
 	for site in tree_sequence.sites():
 		if np.random.random_sample() < p_causal:
 			causal_sites.append(site)
+			causal_indices.append(site_index)
+		site_index += 1
 	tree_sequence_new = tree_sequence.copy(sites=causal_sites)
 	m_causal = tree_sequence_new.get_num_mutations()
-	return tree_sequence_new, m_causal
+	return tree_sequence_new, m_causal, np.array(causal_indices)
 
 def case_control(y, prevalence, sample_prevalence, N):
 	# Determine the liability threshold.
@@ -393,20 +395,14 @@ def run_gwas(tree_sequence, diploid_cases, diploid_controls, p_threshold, cc_maf
 	return summary_stats
 
 def simulate_tree_and_betas(args, log):
-	h2_ldsc = np.zeros(args.n_sims, dtype=np.dtype([
+	h2_ldsc_ref, h2_ldsc_sample, h2_ldsc_int = (np.zeros(args.n_sims, dtype=np.dtype([
 		('h2_A', float), ('int_A', float),
 		('h2_D', float), ('int_D', float), 
 		('h2_E', float), ('int_E', float),
-		('h2_AC', float), ('int_AC', float)]))
+		('h2_AC', float), ('int_AC', float)])) for i in range(3))
 
 	h2_pcgc = np.zeros(args.n_sims, dtype=np.dtype([
 		('h2_A', float), ('h2_D', float), ('h2_AC', float)]))
-
-	h2_ldsc_int = np.zeros(args.n_sims, dtype=np.dtype([
-		('h2_A', float), ('int_A', float),
-		('h2_D', float), ('int_D', float), 
-		('h2_E', float), ('int_E', float),
-		('h2_AC', float), ('int_AC', float)]))
 
 	if args.case_control:
 		args.n = int(args.n_cases / args.prevalence)
@@ -481,16 +477,24 @@ def simulate_tree_and_betas(args, log):
 			log.log('Simulating genetic data using msprime:')
 			
 			# Create a list to fill with tree_sequences.
-			tree_sequence_list = []
-			tree_sequence_list_geno = []
+			tree_sequence_list, tree_sequence_list_geno = [], []
+			genotyped_indices = np.array([], dtype=np.int64) # For extracting later the LD scores of genotyped SNPs
 			m_total, m_geno_total = 0, 0
 			rec_map = None
-			m, m_geno = np.zeros(args.n_chr).astype(int), np.zeros(args.n_chr).astype(int)
-			m_start, m_geno_start = np.zeros(args.n_chr).astype(int), np.zeros(args.n_chr).astype(int)
+			m, m_geno, m_start, m_geno_start = (np.zeros(args.n_chr).astype(int) for i in range(4))
 			# If examining interaction with a covariate, pick the values of the covariate, and normalise.
-			N = args.n
+			N = args.n # Number of individuals in the POPULATION 
+			if args.sample_prop is None:
+				sample_index = None
+				n_sample = N
+			else:
+				log.log('Proportion of total population in the sample: {ld}'.format(ld=args.sample_prop))
+				n_sample = int(N*args.sample_prop)
+				sample_index = random.sample(xrange(N), n_sample)
+			log.log('Number of individuals in the sample: {ld}'.format(ld=n_sample))
 			C = np.random.normal(loc=0, scale=1, size=N)
 			C = (C - np.mean(C)) / np.std(C)
+			C_sample = C if sample_index is None else C[sample_index]
 
 			if args.sim_type != 'standard':
 				dp = msprime.DemographyDebugger(Ne=args.Ne,
@@ -528,13 +532,14 @@ def simulate_tree_and_betas(args, log):
 				log.log('Number of mutations above MAF in the generated data: {m}'.format(m=m[chr]))
 				log.log('Running total of sites > MAF cutoff: {m}'.format(m=m_total))
 
-				# If genotyped proportion is < 1.
+				# Subset genotyped SNPs
 				if args.geno_prop is not None:
-					tree_sequence_tmp, m_geno_tmp = set_mutations_in_tree(tree_sequence_list[chr], args.geno_prop)
+					tree_sequence_tmp, m_geno_tmp, m_geno_indices = set_mutations_in_tree(tree_sequence_list[chr], args.geno_prop)
 					tree_sequence_list_geno.append(tree_sequence_tmp)
 					m_geno[chr] = int(m_geno_tmp)
 					m_geno_start[chr] = m_geno_total
 					m_geno_total += m_geno[chr]
+					genotyped_indices = np.concatenate((genotyped_indices, m_geno_indices + m_start[chr]))
 					log.log('Number of sites genotyped in the generated data: {m}'.format(m=m_geno[chr]))
 					log.log('Running total of sites genotyped: {m}'.format(m=m_geno_total))
 				else:
@@ -542,6 +547,7 @@ def simulate_tree_and_betas(args, log):
 					m_geno[chr] = m[chr]
 					m_geno_start[chr] = m_start[chr]
 					m_geno_total = m_total
+					genotyped_indices = np.concatenate((genotyped_indices, np.arange(m[chr]) + m_start[chr]))
 
 				# Do you want to write the files to .vcf?
 				# The trees shouldn't be written at this point if we're 
@@ -549,70 +555,129 @@ def simulate_tree_and_betas(args, log):
 				# as it'll write ALL the samples to disk rather than just those that we sample.
 				if args.write_trees and args.case_control is False:
 					log.log('Writing genotyped information to disk')
-					write_trees(args.out, tree_sequence_list_geno[chr], chr, m_geno[chr], n_pops, N, sim, args.vcf, np.arange(N))
+					write_trees(args.out, tree_sequence_list_geno[chr], chr, m[chr], n_pops, N, sim, args.vcf, np.arange(N))
 
 			# Now extract the special SNP from the special chromosome.
 			s = args.special_snp
 			Xs = None
 			if args.epistasis and s is None:
-				s = int(m_geno[args.special_chr] / 2)
+				s = int(m[args.special_chr] / 2)
 			if s is not None:
-				if s > m_geno[args.special_chr]:
+				if s > m[args.special_chr]:
 					raise ValueError("Index of special SNP out of bounds.")
-				Xs = next(islice(tree_sequence_list_geno[args.special_chr].variants(), s, None), None)
+				Xs = next(islice(tree_sequence_list[args.special_chr].variants(), s, None), None)
 				Xs = np.array(map(int, Xs.genotypes[0::2])) + np.array(map(int, Xs.genotypes[1::2]))
 
-			lN_AA, lN_AD, lN_AE, lN_DA, lN_DD, lN_DE, lN_EA, lN_ED, lN_EE = (np.ones(m_geno_total) for i in range(9))
+			if args.ref_panel:
+				lN_AA_ref, lN_AD_ref, lN_AE_ref, lN_DA_ref, lN_DD_ref, lN_DE_ref, lN_EA_ref, lN_ED_ref, lN_EE_ref = (np.ones(m_total) for i in range(9))
+			if args.sample_ld:
+				lN_AA_sample, lN_AD_sample, lN_AE_sample, lN_DA_sample, lN_DD_sample, lN_DE_sample, lN_EA_sample, lN_ED_sample, lN_EE_sample = (np.ones(m_geno_total) for i in range(9))
 
 			if args.ldsc:				
 				# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
 				# sub-sampling here.
-				if args.ldscore_within_sample is False or args.case_control is False: # DEV: Currently we have no ascertainment for continuous traits coded up.
-					if args.ldscore_sampling_prop is None:
+				if not args.ref_panel and not args.sample_ld:
+					raise ValueError("Must choose a method of computing LD scores.")
+
+				if args.ref_panel:
+					if args.ref_prop is None:
 						ldsc_index = None
 						n_ldsc = N
 					else:
-						log.log('Using a subset of individuals from the sampled tree to determine LD scores - LD score sampling proportion: {ld}'.format(ld=args.ldscore_sampling_prop))
-						n_ldsc = int(N*args.ldscore_sampling_prop)
+						log.log('Proportion of total population in the reference panel: {ld}'.format(ld=args.ref_prop))
+						n_ldsc = int(N*args.ref_prop)
 						ldsc_index = random.sample(xrange(N), n_ldsc)
+					log.log('Number of individuals in the reference panel: {ld}'.format(ld=n_ldsc))
 
 					for chr in xrange(args.n_chr):
 						log.log('Determining LD scores in chromosome {chr}.'.format(chr=chr+1))
-						coords = np.array(xrange(m_geno[chr]))
-						block_left = getBlockLefts(coords, args.ld_wind_snps)
+						coords = np.array(xrange(m[chr]))
+						block_left = getBlockLefts(np.array(xrange(m[chr])), args.ld_wind_snps)
 
 						start_time = time.time()
 						
-						lN_AA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
+						lN_AA_ref[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
 
 						AA_time = time.time()
-						log.log('Finished LD_AA scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
+						log.log('Finished LD_AA_ref scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
 
-						lN_DD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
+						if args.dominance:
+							lN_DD_ref[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
 
-						DD_time = time.time()
-						log.log('Finished LD_DD scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
+							DD_time = time.time()
+							log.log('Finished LD_DD_ref scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
 
 						if args.epistasis:
-							lN_EE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
+							lN_EE_ref[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
 							
 							EE_time = time.time()
-							log.log('Finished LD_EE scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
+							log.log('Finished LD_EE_ref scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
 
-							lN_AD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_DA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
+							lN_AD_ref[m_start[chr]:(m_start[chr]+m[chr])], lN_DA_ref[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
 							
 							AD_time = time.time() 
-							log.log('Finished LD_AD, LD_DA scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
+							log.log('Finished LD_AD_ref, LD_DA_ref scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
 
-							lN_AE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_EA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
+							lN_AE_ref[m_start[chr]:(m_start[chr]+m[chr])], lN_EA_ref[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
 							
 							AE_time = time.time()
-							log.log('Finished LD_AE, LD_EA scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
+							log.log('Finished LD_AE_ref, LD_EA_ref scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
 
-							lN_DE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_ED[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
+							lN_DE_ref[m_start[chr]:(m_start[chr]+m[chr])], lN_ED_ref[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
 							
 							DE_time = time.time()
-							log.log('Finished LD_DE, LD_ED scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
+							log.log('Finished LD_DE_ref, LD_ED_ref scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
+
+						time_elapsed = round(time.time()-start_time,2)
+						log.log('Time to evaluate LD scores: {T}'.format(T=pr.sec_to_str(time_elapsed)))
+
+				if args.sample_ld and not (args.ascertained_ldscore and args.case_control): 
+					# DEV: Currently we have no ascertainment for continuous traits coded up.
+					if args.ldscore_sampling_prop is None:
+						ldsc_index = sample_index
+						n_ldsc = n_sample
+					else:
+						log.log('Using a subset of individuals from the sample to determine LD scores - LD score sampling proportion: {ld}'.format(ld=args.ldscore_sampling_prop))
+						n_ldsc = int(n_sample*args.ldscore_sampling_prop)
+						ldsc_index = random.sample(xrange(n_sample), n_ldsc)
+
+					for chr in xrange(args.n_chr):
+						log.log('Determining LD scores in chromosome {chr}.'.format(chr=chr+1))
+						block_left = getBlockLefts(np.array(xrange(m_geno[chr])), args.ld_wind_snps)
+
+						start_time = time.time()
+						
+						lN_AA_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
+
+						AA_time = time.time()
+						log.log('Finished LD_AA_sample scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
+
+						if args.dominance:
+							lN_DD_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
+
+							DD_time = time.time()
+							log.log('Finished LD_DD_sample scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
+
+						if args.epistasis:
+							lN_EE_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
+							
+							EE_time = time.time()
+							log.log('Finished LD_EE_sample scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
+
+							lN_AD_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_DA_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
+							
+							AD_time = time.time() 
+							log.log('Finished LD_AD_sample, LD_DA_sample scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
+
+							lN_AE_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_EA_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
+							
+							AE_time = time.time()
+							log.log('Finished LD_AE_sample, LD_EA_sample scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
+
+							lN_DE_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_ED_sample[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
+							
+							DE_time = time.time()
+							log.log('Finished LD_DE_sample, LD_ED_sample scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
 
 						time_elapsed = round(time.time()-start_time,2)
 						log.log('Time to evaluate LD scores: {T}'.format(T=pr.sec_to_str(time_elapsed)))
@@ -621,31 +686,29 @@ def simulate_tree_and_betas(args, log):
 							if chr == 0:
 								mut_names, chr_vec = np.empty(0), np.empty(0)
 
-							mut_names = np.hstack((mut_names, np.core.defchararray.add('rs.' + str(chr+1) + ".", np.arange(1,m_geno[chr]+1).astype('str'))))
-							chr_vec = np.hstack((chr_vec, np.tile(chr+1, m_geno[chr])))
+							mut_names = np.hstack((mut_names, np.core.defchararray.add('rs.' + str(chr+1) + '.', np.arange(1,m[chr]+1).astype('str'))))
+							chr_vec = np.hstack((chr_vec, np.tile(chr+1, m[chr])))
 
 					if args.write_l2:
-						# Write the LD scores to disk.
-						# Now, fix the chromosome number and the names of the mutations - this is as in the write_vcf function, so the 
-						# resultant mutation names are identical.
 						df = pd.DataFrame({'CHR':chr_vec.astype(int), 'SNP': mut_names})
+						
 						if args.epistasis:
 							df = df.join(pd.DataFrame({'L2_AA':lN_AA, 'L2_AD':lN_AD, 'L2_AE':lN_AE, 'L2_DA':lN_DA, 'L2_DD':lN_DD, 'L2_DE':lN_DE, 'L2_EA':lN_EA, 'L2_ED':lN_ED, 'L2_EE':lN_EE}))
-						else:
+						elif args.dominance:
 							df = df.join(pd.DataFrame({'L2_AA':lN_AA, 'L2_DD':lN_DD}))
-						
+						else: df = df.join(pd.DataFrame({'L2_AA':lN_AA}))
+
 						l2_tsv = args.out + '.sim' + str(sim+1) + '.l2'
 						df.to_csv(l2_tsv, sep='\t', header=True, index=False, float_format='%.3f')
-						pd.set_option('display.max_rows', 200)
-    					log.log('\nSummary of LD Scores in {F}'.format(F=out_fname))
-    					t = df.ix[:,2:].describe()
-    					log.log( t.ix[1:,:] )
+						t = df.ix[:,2:].describe()
+						log.log(t.ix[1:,:])
 
 		# Now, run through the chromosomes in this collection of trees, 
 		# and determine the number of causal variants for each chromosome.
 		start_time = time.time()
-		y = np.zeros(N)
+		y = np.zeros(n_sample)
 
+		# DEV: update this!
 		if args.include_pop_strat is True and args.s2 > 0:
 			# Get the means for the populations.
 			alpha = np.random.normal(loc=0, scale=np.sqrt(args.s2), size=n_pops)
@@ -661,7 +724,7 @@ def simulate_tree_and_betas(args, log):
 			
 			if (((1 + int(args.dominance) + int(args.gxe)) * args.p_causal) < 1) or args.same_causal_sites: # If the number of runs through the data is less than 1, run this speedup.
 				
-				tree_sequence_pheno_A, m_causal_A = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+				tree_sequence_pheno_A, m_causal_A, causal_A_indices = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 				log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal_A, mc=m[chr]))
 
 				if args.same_causal_sites is False:
@@ -671,44 +734,44 @@ def simulate_tree_and_betas(args, log):
 						k = 0
 						log.log('Determining phenotype data: additive.')
 						for variant in progress(args.progress_bars, tree_sequence_pheno_A.variants(), total=m_causal_A): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-							X_A = nextSNP_add(variant)
+							X_A = nextSNP_add(variant, sample_index)
 							# Effect size on the phenotype.
 							y += X_A * beta_A[k]
 							k += 1
 
 					if args.dominance and args.h2_D >0:
-						tree_sequence_pheno_D, m_causal_D = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+						tree_sequence_pheno_D, m_causal_D, causal_D_indices = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 						log.log('Picked {m} dominance causal variants out of {mc}'.format(m=m_causal_D, mc=m[chr]))
 						beta_D = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal_D)
 						k = 0
 						log.log('Determining phenotype data: dominance.')
 						for variant in progress(args.progress_bars, tree_sequence_pheno_D.variants(), total=m_causal_D): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-							X_D = nextSNP_dom(variant)
+							X_D = nextSNP_dom(variant, sample_index)
 							# Effect size on the phenotype.
 							y += X_D * beta_D[k]
 							k += 1
 
 					if args.epistasis and args.h2_E >0:
-						tree_sequence_pheno_E, m_causal_E = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+						tree_sequence_pheno_E, m_causal_E, causal_E_indices = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 						log.log('Picked {m} epistasis causal variants out of {mc}'.format(m=m_causal_E, mc=m[chr]))
 						beta_E = np.random.normal(loc=0, scale=np.sqrt(args.h2_E / (m_total * args.p_causal)), size=m_causal_E)
 						k = 0
 						log.log('Determining phenotype data: dominance.')
 						for variant in progress(args.progress_bars, tree_sequence_pheno_E.variants(), total=m_causal_E): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-							X_E = nextSNP_epi(variant)
+							X_E = nextSNP_epi(variant, Xs, sample_index)
 							# Effect size on the phenotype.
 							y += X_E * beta_E[k]
 							k += 1
 
 					if args.gxe and args.h2_AC > 0:
-						tree_sequence_pheno_AC, m_causal_AC = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+						tree_sequence_pheno_AC, m_causal_AC, causal_AC_indices = set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 						log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal_AC, mc=m[chr]))
 						beta_AC = np.random.normal(loc=0, scale=np.sqrt(args.h2_AC / (m_total * args.p_causal)), size=m_causal_AC)
 						# If examining interaction with a covariate, pick the values of the covariate, and normalise.
 						k = 0
 						log.log('Determining phenotype data: gene x environment.')
 						for variant in progress(args.progress_bars, tree_sequence_pheno_AC.variants(), total=m_causal_AC): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-							X_A = nextSNP_add(variant)
+							X_A = nextSNP_add(variant, sample_index)
 							# Effect size on the phenotype.
 							y += C * X_A * beta_AC[k]
 							k += 1
@@ -730,14 +793,14 @@ def simulate_tree_and_betas(args, log):
 					log.log('Determining phenotype data')
 					# Note that we use just one tree_sequence here, because the causal sites are the same in this portion of the code.
 					for variant in progress(args.progress_bars, tree_sequence_pheno_A.variants(), total=m_causal_A): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-						X_A, X_D, X_E = nextSNP(variant, Xs)
+						X_A, X_D, X_E = nextSNP(variant, Xs, sample_index)
 						# Effect size on the phenotype.
-						y += X_A * beta_A[k] + X_D * beta_D[k] + X_E * beta_E[k] + C * X_A * beta_AC[k]
+						y += X_A * beta_A[k] + X_D * beta_D[k] + X_E * beta_E[k] + X_A * C_sample * beta_AC[k]
 						k += 1
 
 			else:
 				m_causal = int(m[chr] * args.p_causal)
-				beta_A, beta_D, beta_E, beta_AC = [np.zeros(m[chr]) for i in range(4)]
+				beta_A, beta_D, beta_E, beta_AC = (np.zeros(m[chr]) for i in range(4))
 				beta_A_causal_index = random.sample(xrange(m[chr]), m_causal)
 				log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal, mc=m[chr]))
 
@@ -764,15 +827,21 @@ def simulate_tree_and_betas(args, log):
 				log.log('Determining phenotype data.')
 
 				for variant in progress(args.progress_bars, tree_sequence_list[chr].variants(), total=m[chr]): # Note, progress here refers you to tqdm which just creates a pretty progress bar.
-					X_A, X_D, X_E = nextSNP(variant, Xs)
+					X_A, X_D, X_E = nextSNP(variant, Xs, sample_index)
 					# Effect size on the phenotype.
-					y += X_A * beta_A[k] + X_D * beta_D[k] + X_E * beta_E[k] + X_A * C * beta_AC[k]
+					y += X_A * beta_A[k] + X_D * beta_D[k] + X_E * beta_E[k] + X_A * C_sample * beta_AC[k]
 					k += 1
 		
 		# Add noise to the y.
-		y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_E+args.h2_AC+args.s2)), size=N)
+		y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_E+args.h2_AC+args.s2)), size=n_sample)
 		# Finally, normalise.
 		y = (y - np.mean(y)) / np.std(y)
+
+		# if args.sample_prop:
+		# 	n_sampled = int(N*args.sample_prop)
+		# 	sampled_individuals = np.random.choice(N, n_sampled, replace=False)
+		# 	y = y[sampled_individuals]
+
 		time_elapsed = round(time.time()-start_time,2)
 		log.log('Time to evaluate phenotype data: {T}'.format(T=pr.sec_to_str(time_elapsed)))
 
@@ -806,9 +875,9 @@ def simulate_tree_and_betas(args, log):
 		else:
 			scaling = 1
 
-		if (((args.case_control is False) or (args.case_control and args.linear)) and args.ldsc):
+		if ((args.case_control is False) or (args.case_control and args.linear)) and args.ldsc:
 			if args.case_control:
-				log.log("Warning: running linear regression for case-control.")
+				log.log('Warning: running linear regression for case-control.')
 				y = (y_cc - np.mean(y_cc)) / np.std(y_cc)
 				index = cases + controls
 				C_sim = C[index]
@@ -822,16 +891,16 @@ def simulate_tree_and_betas(args, log):
 			for chr in xrange(args.n_chr):
 				log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
 				for variant in tree_sequence_list_geno[chr].variants():
-					X_A, X_D, X_E = nextSNP(variant, Xs, index=index)
+					X_A, X_D, X_E = nextSNP(variant, Xs, index=sample_index)
 					# Then sum to get the effect size on the phenotype.
-					Z_A[k] = np.dot(y.reshape(1,n), X_A) / math.sqrt(n)
-					Z_D[k] = np.dot(y.reshape(1,n), X_D) / math.sqrt(n)
-					Z_E[k] = np.dot(y.reshape(1,n), X_E) / math.sqrt(n)
+					Z_A[k] = np.dot(y.reshape(1,n_sample), X_A) / math.sqrt(n_sample)
+					Z_D[k] = np.dot(y.reshape(1,n_sample), X_D) / math.sqrt(n_sample)
+					Z_E[k] = np.dot(y.reshape(1,n_sample), X_E) / math.sqrt(n_sample)
 					
 					# chisq_A[k] = np.dot(y.reshape(1,n), X_A)**2 / n
 					# chisq_D[k] = np.dot(y.reshape(1,n), X_D)**2 / n
 					# chisq_E[k] = np.dot(y.reshape(1,n), X_E)**2 / n
-					chisq_AC[k] = np.dot(y.reshape(1,n), C_sim * X_A)**2 / n
+					chisq_AC[k] = np.dot(y.reshape(1,n_sample), (C_sim if sample_index is None else C_sim[sample_index]) * X_A)**2 / n_sample
 					k += 1
 				chisq_A = Z_A ** 2
 				chisq_D = Z_D ** 2
@@ -839,8 +908,8 @@ def simulate_tree_and_betas(args, log):
 
 		if args.write_z:
 			df = pd.DataFrame({'SNP': np.ones(m), 'A1': np.ones(m), 'A2': np.ones(m), 'Z_A': Z_A.flatten(), 'Z_D': Z_D.flatten(), 'Z_E': Z_E.flatten(), 'N': n * np.ones(m)})
-    		df = df[['SNP', 'A1', 'A2', 'Z_A', 'Z_D', 'Z_E', 'N']]
-    		df.to_csv(args.out + '.sim' + str(sim+1) + '.sumstats', sep='\t', header=True, index=False)
+			df = df[['SNP', 'A1', 'A2', 'Z_A', 'Z_D', 'Z_E', 'N']]
+			df.to_csv(args.out + '.sim' + str(sim+1) + '.sumstats', sep='\t', header=True, index=False)
 
 		if args.write_pheno:
 			if args.case_control:
@@ -854,7 +923,7 @@ def simulate_tree_and_betas(args, log):
 
 					for chr in xrange(args.n_chr):
 						tree_sequence_to_write = tree_sequence_list_geno[chr].simplify(tree_index)
-						write_trees(args.out, tree_sequence_to_write, chr, m_geno[chr], n_pops, N, sim, args.vcf, index)
+						write_trees(args.out, tree_sequence_to_write, chr, m[chr], n_pops, N, sim, args.vcf, index)
 			else:
 				sample_ID = np.arange(N)
 
@@ -864,7 +933,7 @@ def simulate_tree_and_betas(args, log):
 		# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
 		# sub-sampling here.
 		if args.ldsc:
-			if args.ldscore_within_sample and args.case_control:
+			if args.ascertained_ldscore and args.case_control:
 				if args.ldscore_sampling_prop is None:
 					ldsc_index = index
 					n_ldsc = n
@@ -875,41 +944,41 @@ def simulate_tree_and_betas(args, log):
 
 				for chr in xrange(args.n_chr):
 					log.log('Determining LD scores in chromosome {chr}.'.format(chr=chr+1))
-					coords = np.array(xrange(m_geno[chr]))
-					block_left = getBlockLefts(coords, args.ld_wind_snps)
+					block_left = getBlockLefts(np.array(xrange(m_geno[chr])), args.ld_wind_snps)
 
 					start_time = time.time()
 					
-					lN_AA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
+					lN_AA_sample[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_add, nextSNP_add, False, ldsc_index)
 
 					AA_time = time.time()
-					log.log('Finished LD_AA scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
+					log.log('Finished LD_AA_sample scores in {T}'.format(T=pr.sec_to_str(round(AA_time-start_time, 2))))
 
-					lN_DD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
+					if args.dominance:
+						lN_DD_sample[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_dom, False, ldsc_index)
 
-					DD_time = time.time()
-					log.log('Finished LD_DD scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
+						DD_time = time.time()
+						log.log('Finished LD_DD_sample scores in {T}'.format(T=pr.sec_to_str(round(DD_time-AA_time, 2))))
 
 					if args.epistasis:
-						lN_EE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
+						lN_EE_sample[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_epi, nextSNP_epi, False, ldsc_index)
 						
 						EE_time = time.time()
-						log.log('Finished LD_EE scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
+						log.log('Finished LD_EE_sample scores in {T}'.format(T=pr.sec_to_str(round(EE_time-DD_time, 2))))
 
-						lN_AD[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_DA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
+						lN_AD_sample[m_start[chr]:(m_start[chr]+m[chr])], lN_DA_sample[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_add, nextSNP_dom, True, ldsc_index)
 						
 						AD_time = time.time() 
-						log.log('Finished LD_AD, LD_DA scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
+						log.log('Finished LD_AD_sample, LD_DA_sample scores in {T}'.format(T=pr.sec_to_str(round(AD_time-EE_time, 2))))
 
-						lN_AE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_EA[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
+						lN_AE_sample[m_start[chr]:(m_start[chr]+m[chr])], lN_EA_sample[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_add, nextSNP_epi, True, ldsc_index)
 						
 						AE_time = time.time()
-						log.log('Finished LD_AE, LD_EA scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
+						log.log('Finished LD_AE_sample, LD_EA_sample scores in {T}'.format(T=pr.sec_to_str(round(AE_time-AD_time, 2))))
 
-						lN_DE[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])], lN_ED[m_geno_start[chr]:(m_geno_start[chr]+m_geno[chr])] = corSumVarBlocks(tree_sequence_list_geno[chr].variants(), block_left, args.chunk_size, m_geno[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
+						lN_DE_sample[m_start[chr]:(m_start[chr]+m[chr])], lN_ED_sample[m_start[chr]:(m_start[chr]+m[chr])] = corSumVarBlocks(tree_sequence_list_score[chr].variants(), block_left, args.chunk_size, m[chr], n_ldsc, Xs, nextSNP_dom, nextSNP_epi, True, ldsc_index)
 						
 						DE_time = time.time()
-						log.log('Finished LD_DE, LD_ED scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
+						log.log('Finished LD_DE_sample, LD_ED_sample scores in {T}'.format(T=pr.sec_to_str(round(DE_time-AE_time, 2))))
 
 					time_elapsed = round(time.time()-start_time,2)
 					log.log('Time to evaluate LD scores: {T}'.format(T=pr.sec_to_str(time_elapsed)))			
@@ -921,43 +990,91 @@ def simulate_tree_and_betas(args, log):
 			# Run the regressions
 			log.log('Running LD score regressions.')
 			hsqhat_A, hsqhat_D, hsqhat_E, hsqhat_AC = [], [], [], []
+
 			for i in xrange(len(intercept_h2)):
 				if args.epistasis:
 					y = np.concatenate((chisq_A, chisq_D, chisq_E), axis=0)
-					x = np.concatenate((lN_AA, lN_DA, lN_EA, lN_AD, lN_DD, lN_ED, lN_AE, lN_DE, lN_EE))[None,:].reshape((3,3*m_geno_total)).T
-					w = np.concatenate((lN_EA, lN_ED, lN_EE))[None,:].T
 
-					df = pd.DataFrame(np.concatenate((y,x), axis=1))
-					df.columns = [['y', 'A', 'D', 'E']]
-					df.to_csv(args.out + '.reg_values.tsv', sep='\t', header=True, index=False)
+					if args.ref_panel:
+						x = np.concatenate((lN_AA_ref[genotyped_indices], lN_AD_ref[genotyped_indices], lN_AE_ref[genotyped_indices], lN_DA_ref[genotyped_indices], lN_DD_ref[genotyped_indices], lN_DE_ref[genotyped_indices], lN_EA_ref[genotyped_indices], lN_ED_ref[genotyped_indices], lN_EE_ref[genotyped_indices]))[None,:].reshape((3,3*m_geno_total)).T
+						w = np.concatenate((lN_EA_ref[genotyped_indices], lN_ED_ref[genotyped_indices], lN_EE_ref[genotyped_indices]))[None,:].T
 
-					hsqhat_E.append(reg.Hsq(y, x, w,
-					np.tile(n,3*m_geno_total).reshape((3*m_geno_total,1)), np.tile(m_geno_total,3).reshape((1,3)),
-					n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+						hsqhat_E.append(reg.Hsq(y, x, w,
+						np.tile(n,3*m_geno_total).reshape((3*m_geno_total,1)), np.tile(m_geno_total,3).reshape((1,3)),
+						n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
 
-				else:
-					hsqhat_A.append(reg.Hsq(chisq_A,
-					lN_AA.reshape((m_geno_total,1)), lN_AA.reshape((m_geno_total,1)),
+					if args.sample_ld:
+						x = np.concatenate((lN_AA_sample, lN_AD_sample, lN_AE_sample, lN_DA_sample, lN_DD_sample, lN_DE_sample, lN_EA_sample, lN_ED_sample, lN_EE_sample))[None,:].reshape((3,3*m_geno_total)).T
+						w = np.concatenate((lN_EA_sample, lN_ED_sample, lN_EE_sample))[None,:].T
+
+						hsqhat_E.append(reg.Hsq(y, x, w,
+						np.tile(n,3*m_geno_total).reshape((3*m_geno_total,1)), np.tile(m_geno_total,3).reshape((1,3)),
+						n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+				else: 
+					if args.ref_panel:
+						hsqhat_A.append(reg.Hsq(chisq_A, lN_AA_ref[genotyped_indices][:,None], lN_AA_ref[genotyped_indices][:,None],
+						np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+						n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+						if args.dominance:
+							hsqhat_D.append(reg.Hsq(chisq_D, lN_DD_ref[genotyped_indices][:,None], lN_DD_ref[genotyped_indices][:,None],
+							np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+							n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+					if args.sample_ld: 
+						hsqhat_A.append(reg.Hsq(chisq_A, lN_AA_sample[:,None], lN_AA_sample[:,None],
+						np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+						n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+						if args.dominance:
+							hsqhat_D.append(reg.Hsq(chisq_D, lN_DD_sample[:,None], lN_DD_sample[:,None],
+							np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+							n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
+
+				# if args.gxe:
+				if args.ref_panel:
+					hsqhat_AC.append(reg.Hsq(chisq_AC,
+					lN_AA_ref[genotyped_indices][:,None], lN_AA_ref[genotyped_indices][:,None],
 					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
 					n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
 
-					hsqhat_D.append(reg.Hsq(chisq_D,
-					lN_DD.reshape((m_geno_total,1)), lN_DD.reshape((m_geno_total,1)),
+				if args.sample_ld:
+					hsqhat_AC.append(reg.Hsq(chisq_AC,
+					lN_AA_sample[:,None], lN_AA_sample[:,None],
 					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
 					n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
-
-				hsqhat_AC.append(reg.Hsq(chisq_AC,
-				lN_AA.reshape((m_geno_total,1)), lN_AA.reshape((m_geno_total,1)),
-				np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-				n_blocks=min(m_geno_total, args.n_blocks), intercept=intercept_h2[i]))
 
 			if args.epistasis:
-				h2_ldsc['h2_A'][sim], h2_ldsc['h2_D'][sim], h2_ldsc['h2_E'][sim], h2_ldsc['h2_AC'][sim] = np.array([hsqhat_E[0].cat[0,0], hsqhat_E[0].cat[0,1], hsqhat_E[0].cat[0,2], hsqhat_AC[0].tot]) * scaling
-				h2_ldsc['int_A'][sim], h2_ldsc['int_D'][sim], h2_ldsc['int_E'][sim], h2_ldsc['int_AC'][sim] = hsqhat_E[0].intercept, hsqhat_E[0].intercept, hsqhat_E[0].intercept, hsqhat_AC[0].intercept
-			else:
-				h2_ldsc['h2_A'][sim], h2_ldsc['h2_D'][sim], h2_ldsc['h2_AC'][sim] = np.array([hsqhat_A[0].tot, hsqhat_D[0].tot, hsqhat_AC[0].tot]) * scaling
-				h2_ldsc['int_A'][sim], h2_ldsc['int_D'][sim], h2_ldsc['int_AC'][sim] = hsqhat_A[0].intercept, hsqhat_D[0].intercept, hsqhat_AC[0].intercept
+				if args.ref_panel:
+					h2_ldsc_ref['h2_A'][sim], h2_ldsc_ref['h2_D'][sim], h2_ldsc_ref['h2_E'][sim], h2_ldsc_ref['h2_AC'][sim] = np.array([hsqhat_E[0].cat[0,0], hsqhat_E[0].cat[0,1], hsqhat_E[0].cat[0,2], hsqhat_AC[0].tot]) * scaling
+					h2_ldsc_ref['int_A'][sim], h2_ldsc_ref['int_D'][sim], h2_ldsc_ref['int_E'][sim], h2_ldsc_ref['int_AC'][sim] = hsqhat_E[0].intercept, hsqhat_E[0].intercept, hsqhat_E[0].intercept, hsqhat_AC[0].intercept
 
+				if args.sample_ld:
+					h2_ldsc_sample['h2_A'][sim], h2_ldsc_sample['h2_D'][sim], h2_ldsc_sample['h2_E'][sim], h2_ldsc_sample['h2_AC'][sim] = np.array([hsqhat_E[-1].cat[0,0], hsqhat_E[-1].cat[0,1], hsqhat_E[-1].cat[0,2], hsqhat_AC[-1].tot]) * scaling
+					h2_ldsc_sample['int_A'][sim], h2_ldsc_sample['int_D'][sim], h2_ldsc_sample['int_E'][sim], h2_ldsc_sample['int_AC'][sim] = hsqhat_E[-1].intercept, hsqhat_E[-1].intercept, hsqhat_E[-1].intercept, hsqhat_AC[-1].intercept
+
+			else:
+				if args.ref_panel: 
+					h2_ldsc_ref['h2_A'][sim], h2_ldsc_ref['int_A'][sim] = hsqhat_A[0].tot * scaling, hsqhat_A[0].intercept
+
+					if args.dominance:
+						h2_ldsc_ref['h2_D'][sim], h2_ldsc_ref['int_D'][sim] = hsqhat_D[0].tot * scaling, hsqhat_D[0].intercept
+
+				if args.sample_ld:
+					h2_ldsc_sample['h2_A'][sim], h2_ldsc_sample['int_A'][sim] = hsqhat_A[-1].tot * scaling, hsqhat_A[-1].intercept
+
+					if args.dominance:
+						h2_ldsc_sample['h2_D'][sim], h2_ldsc_sample['int_D'][sim] = hsqhat_D[-1].tot * scaling, hsqhat_D[-1].intercept
+
+			if args.gxe:
+				if args.ref_panel:
+					h2_ldsc_ref['h2_AC'][sim], h2_ldsc_ref['int_AC'][sim] = hsqhat_AC[0].tot * scaling, hsqhat_AC[0].intercept
+
+				if args.sample_ld:
+					h2_ldsc_sample['h2_AC'][sim], h2_ldsc_sample['int_AC'][sim] = hsqhat_AC[-1].tot * scaling, hsqhat_AC[-1].intercept
+
+			# DEV: Update this!
 			if args.free_and_no_intercept:
 				h2_ldsc_int['h2_A'][sim], h2_ldsc_int['h2_D'][sim], h2_ldsc_int['h2_AC'][sim] = np.array([hsqhat_A[1].tot, hsqhat_D[1].tot, hsqhat_AC[1].tot]) * scaling
 				h2_ldsc_int['int_A'][sim], h2_ldsc_int['int_D'][sim], h2_ldsc_int['int_AC'][sim] = hsqhat_A[1].intercept, hsqhat_D[1].intercept, hsqhat_AC[1].intercept
@@ -980,15 +1097,15 @@ def simulate_tree_and_betas(args, log):
 					log.log('Time to evaluate K_A, K_D, and K_E in chromosome {chr}: {T}'.format(chr=chr+1, T=pr.sec_to_str(time_elapsed)))
 					
 			log.log('Running PCGC regressions')
-			h2_A = sm.OLS(P[where], exog = K_A[where] / m_geno_total).fit().params
-			h2_AD = sm.OLS(P[where], exog = np.column_stack((K_A[where], K_D[where])) / m_geno_total).fit().params
-			h2_ADAC = sm.OLS(P[where], exog = np.column_stack((K_A[where], K_D[where], K_AC[where])) / m_geno_total).fit().params
+			h2_A = sm.OLS(P[where], exog = K_A[where] / m_total).fit().params
+			h2_AD = sm.OLS(P[where], exog = np.column_stack((K_A[where], K_D[where])) / m_total).fit().params
+			h2_ADAC = sm.OLS(P[where], exog = np.column_stack((K_A[where], K_D[where], K_AC[where])) / m_total).fit().params
 
 			h2_pcgc['h2_A'][sim] = (h2_A) * scaling
 			h2_pcgc['h2_D'][sim] = (np.sum(h2_AD) - h2_A) * scaling
 			h2_pcgc['h2_AC'][sim] = (np.sum(h2_ADAC) - np.sum(h2_AD)) * scaling
 
-	return h2_ldsc, h2_pcgc, h2_ldsc_int
+	return h2_ldsc_ref, h2_ldsc_sample, h2_pcgc, h2_ldsc_int
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--out', default='msprimesim', type=str,
@@ -1016,7 +1133,7 @@ parser.add_argument('--ld-wind-snps', default=1000, type=int,
 parser.add_argument('--chunk-size', default=50, type=int,
 	help='Chunk size for LD Score calculation. Use the default [Default: 50].')
 parser.add_argument('--n', default=40000, type=int,
-	help='Number of individuals in the sampled genotypes [Default: 40,000].')
+	help='Number of individuals simulated [Default: 40,000].')
 parser.add_argument('--m', default=1000000, type=int,
 	help='Length of the region analysed in nucleotides [Default: 1,000,000].')
 parser.add_argument('--Ne', default=10000, type=int,
@@ -1052,6 +1169,10 @@ parser.add_argument('--pcgc', default=False, action='store_true',
 	help='Do you want to estimate heritability using PCGC too? Warning: slow and memory intensive.')
 parser.add_argument('--dominance', default=False, action='store_true',
 	help='Do you want to include dominance simulation and estimation?')
+parser.add_argument('--ref-panel', default=False, action='store_true',
+	help='Do you want to compute LD scores from reference panel?')
+parser.add_argument('--sample-ld', default=False, action='store_true',
+	help='Do you want to compute LD scores in sample?')
 parser.add_argument('--epistasis', default=False, action='store_true',
 	help='Do you want to include epistasis simulation and estimation?')
 parser.add_argument('--gxe', default=False, action='store_true',
@@ -1059,7 +1180,13 @@ parser.add_argument('--gxe', default=False, action='store_true',
 parser.add_argument('--write-trees', default=False, action='store_true',
 	help='Do you want to write the tree sequences to .bim/.bed/.fam format?')
 parser.add_argument('--geno-prop', default=None, type=float,
-	help='Is the proportion of SNPs genotyped different to the number of SNPs?')
+	help='What is the proportion of SNPs with LD scores available which are genotyped?')
+parser.add_argument('--score-prop', default=None, type=float,
+	help='What is the proportion of SNPs with LD scores available?')
+parser.add_argument('--ref-prop', default=None, type=float,
+	help='What proportion of total individuals is in your reference panel?')
+parser.add_argument('--sample-prop', default=None, type=float,
+	help='What proportion of total individuals is in your sample?')
 parser.add_argument('--progress-bars', default=False, action='store_true',
 	help='Do you want fancy progress bars? Important - Don\'t use this flag when running jobs on a '
 	'cluster, lest you want tons of printing to your .log file!')
@@ -1080,7 +1207,7 @@ parser.add_argument('--sample-prevalence', default=None, type=float,
 parser.add_argument('--ldscore-sampling-prop', default=None, type=float,
 	help='If running a large ascertained case-control simulation, you may want to determine LD score estimates a '
 	'subset of the individuals in the tree to increase speed.')
-parser.add_argument('--ldscore-within-sample', default=False, action='store_true',
+parser.add_argument('--ascertained-ldscore', default=False, action='store_true',
 	help='Do you want to evaluate the LD scores using the case-control sample used to obtain the effect size estimates? '
 	'Note that this will result in LD scores being generated for each simulation, so may slow things down if ascertainment is '
 	'low and the sample size is large.')
@@ -1125,22 +1252,32 @@ if __name__ == '__main__':
 		out_fname = args.out + '.h2'
 
 		if args.pcgc:
-			h2_ldsc, h2_pcgc, h2_ldsc_int = simulate_tree_and_betas(args, log)
-			out_fname_pcgc = args.out + '.pcgc'
+			h2_ldsc_ref, h2_ldsc_sample, h2_pcgc, h2_ldsc_int = simulate_tree_and_betas(args, log)
 			
 			df = pd.DataFrame.from_records(np.c_[h2_pcgc['h2_A'], h2_pcgc['h2_D'], h2_pcgc['h2_AC']])
 			df.columns = ['h2_A', 'h2_D', 'h2_AC']
-			df.to_csv(out_fname_pcgc, sep='\t', header=True, index=False, float_format='%.3f')
-		else:
-			h2_ldsc, h2_pcgc, h2_ldsc_int = simulate_tree_and_betas(args, log)
+			df.to_csv(args.out + '.pcgc', sep='\t', header=True, index=False, float_format='%.3f')
 
-		df = pd.DataFrame.from_records(np.c_[
-			h2_ldsc['h2_A'], h2_ldsc['int_A'],
-			h2_ldsc['h2_D'], h2_ldsc['int_D'],
-			h2_ldsc['h2_E'], h2_ldsc['int_E'],
-			h2_ldsc['h2_AC'], h2_ldsc['int_AC']])
-		df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_E', 'int_E', 'h2_AC', 'int_AC']
-		df.to_csv(out_fname, sep='\t', header=True, index=False, float_format='%.3f')
+		if args.ldsc:
+			h2_ldsc_ref, h2_ldsc_sample, h2_pcgc, h2_ldsc_int = simulate_tree_and_betas(args, log)
+
+			if args.ref_panel:
+				df = pd.DataFrame.from_records(np.c_[
+				h2_ldsc_ref['h2_A'], h2_ldsc_ref['int_A'],
+				h2_ldsc_ref['h2_D'], h2_ldsc_ref['int_D'],
+				h2_ldsc_ref['h2_E'], h2_ldsc_ref['int_E'],
+				h2_ldsc_ref['h2_AC'], h2_ldsc_ref['int_AC']])
+				df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_E', 'int_E', 'h2_AC', 'int_AC']
+				df.to_csv(out_fname + '.ref', sep='\t', header=True, index=False, float_format='%.3f')
+
+			if args.sample_ld:
+				df = pd.DataFrame.from_records(np.c_[
+				h2_ldsc_sample['h2_A'], h2_ldsc_sample['int_A'],
+				h2_ldsc_sample['h2_D'], h2_ldsc_sample['int_D'],
+				h2_ldsc_sample['h2_E'], h2_ldsc_sample['int_E'],
+				h2_ldsc_sample['h2_AC'], h2_ldsc_sample['int_AC']])
+				df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_E', 'int_E', 'h2_AC', 'int_AC']
+				df.to_csv(out_fname + '.sample', sep='\t', header=True, index=False, float_format='%.3f')
 
 		if args.free_and_no_intercept:
 			out_fname = args.out + '.int.h2'
