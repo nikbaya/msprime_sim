@@ -91,7 +91,6 @@ def simulate_tree_and_betas(args, log):
 				chisq_A, chisq_D, chisq_AC, n, C_sim, index = ph.get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 				scaling = 1
 
-
 			# Intercept options for the regression.
 			intercept_h2 = [None]
 			if args.free_and_no_intercept: intercept_h2 = [None, 1]
