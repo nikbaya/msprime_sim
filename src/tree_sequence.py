@@ -4,15 +4,6 @@ import numpy as np
 import src.msprime_sim_scenarios as mssim
 import src.write as write
 
-def set_mutations_in_tree(tree_sequence, p_causal):
-	causal_sites = []
-	for site in tree_sequence.sites():
-		if np.random.random_sample() < p_causal:
-			causal_sites.append(site)
-	tree_sequence_new = tree_sequence.copy(sites=causal_sites)
-	m_causal = tree_sequence_new.get_num_mutations()
-	return tree_sequence_new, m_causal
-
 def initialise(args):
 	tree_sequence_list = []
 	tree_sequence_list_geno = []
@@ -27,20 +18,55 @@ def initialise(args):
 
 	return args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start
 
-def get_common_mutations(args, tree_sequence, log):
-	common_mutations = []
-	n_haps = tree_sequence.get_sample_size()
+def get_common_mutations_ts(args, tree_sequence, log):
+	
+	common_sites = msprime.SiteTable()
+	common_mutations = msprime.MutationTable()
 
 	# Get the mutations > MAF.
+	n_haps = tree_sequence.get_sample_size()
 	log.log('Determining sites > MAF cutoff {m}'.format(m=args.maf))
 
 	for tree in tree_sequence.trees():
 		for site in tree.sites():
 			f = tree.get_num_leaves(site.mutations[0].node) / n_haps
 			if f > args.maf and f < 1-args.maf:
-				common_mutations.append(site)
+				common_site_id = common_sites.add_row(
+					position=site.position,
+					ancestral_state=site.ancestral_state)
+				common_mutations.add_row(
+					site=common_site_id,
+					node=site.mutations[0].node,
+					derived_state=site.mutations[0].derived_state)
+	tables = tree_sequence.dump_tables()
+	new_tree_sequence = msprime.load_tables(
+		nodes=tables.nodes, edges=tables.edges,
+		sites=common_sites, mutations=common_mutations)
+	return new_tree_sequence
 
-	return common_mutations
+def set_mutations_in_tree(tree_sequence, p_causal):
+
+	causal_sites = msprime.SiteTable()
+	causal_mutations = msprime.MutationTable()
+
+	# Get the causal mutations.
+	for site in tree_sequence.sites():
+		if np.random.random_sample() < p_causal:
+			causal_site_id = causal_sites.add_row(
+				position=site.position,
+				ancestral_state=site.ancestral_state)
+			causal_mutations.add_row(
+				site=causal_site_id,
+				node=site.mutations[0].node,
+				derived_state=site.mutations[0].derived_state)
+
+	tables = tree_sequence.dump_tables()
+	new_tree_sequence = msprime.load_tables(
+		nodes=tables.nodes, edges=tables.edges,
+		sites=causal_sites, mutations=causal_mutations)
+	m_causal = new_tree_sequence.get_num_mutations()
+
+	return new_tree_sequence, m_causal
 
 def load_tree_sequence(args, log):
 
@@ -57,8 +83,7 @@ def load_tree_sequence(args, log):
 	n_haps = tree_sequence_list[0].get_sample_size()
 
 	# Get the mutations > MAF.
-	common_mutations = get_common_mutations(args, tree_sequence_list[0], log)
-	tree_sequence_list[0] = tree_sequence_list[0].copy(sites=common_mutations)
+	tree_sequence_list[0] = get_common_mutations_ts(args, tree_sequence_list[0], log)
 
 	m[0] = int(tree_sequence_list[0].get_num_mutations())
 	m_start[0] = 0
@@ -99,6 +124,9 @@ def simulate_tree_sequence(args, rec_map_list, log):
 		sample_size = 2*args.n
 		n_pops = 1
 
+	if args.sim_type not in set(['standard', 'out_of_africa', 'out_of_africa_all_pops', 'unicorn']):
+		raise Exception('Simulation type not found.')
+
 	if args.sim_type == 'out_of_africa':
 		log.log("Note: passed effective population size is ignored for this option.")
 		sample_size = [0, args.n, 0]
@@ -136,7 +164,7 @@ def simulate_tree_sequence(args, rec_map_list, log):
 			demographic_events=demographic_events)
 		dp.print_history()
 
-	for chr in xrange(args.n_chr):
+	for chr in range(args.n_chr):
 		tree_sequence_list.append(msprime.simulate(sample_size=sample_size,
 				population_configurations=population_configurations,
 				migration_matrix=migration_matrix,
@@ -149,8 +177,7 @@ def simulate_tree_sequence(args, rec_map_list, log):
 		n_haps = tree_sequence_list[chr].get_sample_size()
 
 		# Get the mutations > MAF.
-		common_mutations = get_common_mutations(args, tree_sequence_list[chr], log)
-		tree_sequence_list[chr] = tree_sequence_list[chr].copy(sites=common_mutations)
+		tree_sequence_list[chr] = get_common_mutations_ts(args, tree_sequence_list[chr], log)
 
 		m[chr] = int(tree_sequence_list[chr].get_num_mutations())
 		m_start[chr] = m_total

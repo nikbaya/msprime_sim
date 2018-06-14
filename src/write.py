@@ -10,10 +10,10 @@ def trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 	with open(vcf_name, "w") as vcf_file:
 		tree_sequence.write_vcf(vcf_file, ploidy=2)
 
-	print N
+	print(N)
 	# DEV: update the function - no longer require N (double check this).
 	N = int(tree_sequence.get_sample_size() / 2)
-	print N
+	print(N)
 	
 	# Create altered IDs an Family IDs to replace the .fam file that we will create.
 	fam_id = np.tile('msp', N)
@@ -58,11 +58,11 @@ def trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 
 		os.system('../plink/plink --update-ids ' + tmp_index_tsv + ' --bfile ' + bfile_out + ' --make-bed --out ' + bfile_out)
 		# Rename 'A' to '0'.
- 		os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
- 		# os.system('rm ' + tmp_index_tsv)
- 		# Remove the .bak and temporary files
- 		os.system('rm ' + bfile_out + '*.bak')
- 		os.system('rm ' + bfile_out + '*~')
+		os.system("sed -i.bak 's/msp A/msp 0/' " + bfile_out + '.fam')
+		# os.system('rm ' + tmp_index_tsv)
+		# Remove the .bak and temporary files
+		os.system('rm ' + bfile_out + '*.bak')
+		os.system('rm ' + bfile_out + '*~')
 
 	pop_ann = np.empty(N)
 

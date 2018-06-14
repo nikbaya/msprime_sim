@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import itertools as it
 import parse as ps
-import regressions as reg
+import src.regressions as reg
 import sys
 import traceback
 import copy
@@ -86,8 +86,8 @@ def _read_M(args, log, n_annot):
     try:
         M_annot = np.array(M_annot).reshape((1, n_annot))
     except ValueError as e:
-        print M_annot
-        print n_annot
+        print(M_annot)
+        print(n_annot)
         raise ValueError(
             '# terms in --M must match # of LD Scores in --ref-ld.\n' + str(e.args))
 

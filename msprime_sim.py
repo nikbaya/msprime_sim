@@ -42,12 +42,12 @@ def simulate_tree_and_betas(args, log):
 		('h2_D', float), ('int_D', float),
 		('h2_AC', float), ('int_AC', float)]))
 
-	for sim in xrange(args.n_sims):
+	for sim in range(args.n_sims):
 		if (sim == 0 or args.fix_genetics is False):
 			if args.load_tree_sequence is None:
 				tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops  = ts.simulate_tree_sequence(args, rec_map_list, log)
 				if args.dump_trees:
-					for chr in xrange(args.n_chr):
+					for chr in range(args.n_chr):
 						dump_out = args.out + ".chr" + str(chr+1) + ".sim" + str(sim+1) + ".tree"
 						tree_sequence_list[chr].dump(dump_out)
 			else:
@@ -63,13 +63,14 @@ def simulate_tree_and_betas(args, log):
 				else:
 					log.log('Using a subset of individuals from the sampled tree to determine LD scores - LD score sampling proportion: {ld}'.format(ld=args.ldscore_sampling_prop))
 					n_ldsc = int(N*args.ldscore_sampling_prop)
-					ldsc_index = random.sample(xrange(N), n_ldsc)
+					ldsc_index = random.sample(range(N), n_ldsc)
 
 				lN_A, lN_D = ld.get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_geno, n_ldsc, ldsc_index, sim, log)
 
 		# Note that we pass the tree_sequence_list as potentially non-genotyped SNPs affect phenotype.
 		y, C = ph.get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log)
-		print y[:5]
+		log.log('Evaluated phenotypes.')
+
 		# Need to alter this function - splitting further.
 		if args.ldsc:
 			if args.case_control:
@@ -100,7 +101,7 @@ def simulate_tree_and_betas(args, log):
 			log.log('Running LD score regressions.')
 			hsqhat_A, hsqhat_D, hsqhat_AC = [], [], []
 
-			for i in xrange(len(intercept_h2)):
+			for i in range(len(intercept_h2)):
 				hsqhat_A.append(reg.Hsq(chisq_A,
 					lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
 					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
@@ -141,6 +142,11 @@ parser.add_argument('--h2_D', default=0.1, type=float,
 	help='Dominance heritability contribution [Default: 0.1].')
 parser.add_argument('--h2_AC', default=0.2, type=float,
 	help='Dominance heritability contribution [Default: 0.2].')
+parser.add_argument('--C-bool', default=False, action='store_true',
+	help='Is the environmental covariate that you consider boolean?')
+parser.add_argument('--C-bool-p', default=0.5, type=float,
+	help='Probability of "success" for a boolean covariate which is independent of the genetic data.')
+# DEV: Shouldn't there be the possibility for this to be different across the different classes?
 parser.add_argument('--p-causal', default=1, type=float,
 	help='Proportion of SNPs that are causal [Default: 1].')
 # Filtering / Data Management for LD Score

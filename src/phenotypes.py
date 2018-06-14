@@ -38,7 +38,7 @@ def case_control(y, prevalence, sample_prevalence, N):
 			'is sample prevalence close to population prevalence?')
 		controls = controls[mask]
 	else:
-		controls = controls[mask][random.sample(xrange(N - n_cases), n_controls)]
+		controls = controls[mask][random.sample(range(N - n_cases), n_controls)]
 
 	controls = sorted(controls)
 
@@ -52,20 +52,29 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 		random.seed(1)
 		np.random.seed(1)
 
-	C = np.random.normal(loc=0, scale=1, size=N)
-	C = (C - np.mean(C)) / np.std(C)
+	if args.C_bool:
+		C = np.random.binomial(1, args.C_bool_p, size=N)
+		C = (C - np.mean(C)) / np.std(C)
+		log.log('Boolean covariate.')
+		log.log('Average kurtosis for these phenotypes: {K}.'.format(K=np.sum(C**4)/N))
+	else:
+		C = np.random.normal(loc=0, scale=1, size=N)
+		C = (C - np.mean(C)) / np.std(C)
+		# print the average kurtosis across the individuals
+		log.log('Normally distributed covariate. Kurtosis should be around 3.')
+		log.log('Average kurtosis for these phenotypes: {K}.'.format(K=np.sum(C**4)/N))
 	
 	if args.include_pop_strat is True and args.s2 > 0:
 		# Get the means for the populations.
 		alpha = np.random.normal(loc=0, scale=np.sqrt(args.s2), size=n_pops)
 		log.log(alpha)
 		# Add pop-strat additions to the phenotype vector, conditional on the population sampled from.
-		for pops in xrange(n_pops):
+		for pops in range(n_pops):
 			pop_leaves = tree_sequence_list[0].get_samples(population_id=pops)
 			len(map(int, [x/2 for x in pop_leaves[0::2]]))
 			y[map(int, [x/2 for x in pop_leaves[0::2]])] += alpha[pops]
 
-	for chr in xrange(args.n_chr):
+	for chr in range(args.n_chr):
 		m_chr = int(tree_sequence_list[chr].get_num_mutations())
 		log.log('Picking causal variants and determining effect sizes in chromosome {chr}'.format(chr=chr+1))
 		
@@ -134,20 +143,20 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 		else:
 			m_causal = int(m_chr * args.p_causal)
 			beta_A, beta_D, beta_AC = np.zeros(m_chr), np.zeros(m_chr), np.zeros(m_chr)
-			beta_A_causal_index = random.sample(xrange(m_chr), m_causal)
+			beta_A_causal_index = random.sample(range(m_chr), m_causal)
 			log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal, mc=m_chr))
 
 			if args.h2_A > 0:
 				beta_A[beta_A_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_A / (m_total * args.p_causal)), size=m_causal)
 			
 			if args.dominance:
-				beta_D, beta_D_causal_index = np.zeros(m_chr), random.sample(xrange(m_chr), m_causal)
+				beta_D, beta_D_causal_index = np.zeros(m_chr), random.sample(range(m_chr), m_causal)
 				log.log('Picked {m} dominance causal variants out of {mc}'.format(m=m_causal, mc=m_chr))
 				if args.h2_D > 0:
 					beta_D[beta_D_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_D / (m_total * args.p_causal)), size=m_causal)
 
 			if args.gxe:
-				beta_AC, beta_AC_causal_index = np.zeros(m_chr), random.sample(xrange(m_chr), m_causal)
+				beta_AC, beta_AC_causal_index = np.zeros(m_chr), random.sample(range(m_chr), m_causal)
 				log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal, mc=m_chr))
 				if args.h2_AC > 0:
 					beta_AC[beta_AC_causal_index] = np.random.normal(loc=0, scale=np.sqrt(args.h2_AC / (m_total * args.p_causal)), size=m_causal)
@@ -169,7 +178,6 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 
 	return y, C
 
-
 # Here, want to create a chi sq function, and an LD score function.
 
 def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log):
@@ -189,7 +197,7 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 
 		if args.linear is False and args.ldsc is True:
 			k = 0
-			for chr in xrange(args.n_chr):
+			for chr in range(args.n_chr):
 				for variant in tl.progress(args.progress_bars, tree_sequence_list_geno[chr].variants(), total=m_geno[chr]):
 					X_A, X_D = sg.nextSNP(variant, index = index)
 					chisq_A[k] = sm.Logit(y_cc, sm.add_constant(X_A)).fit(disp=0).llr
@@ -210,7 +218,7 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 
 		# Then use these ys to determine beta hats.
 		k = 0
-		for chr in xrange(args.n_chr):
+		for chr in range(args.n_chr):
 			log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
 			for variant in tree_sequence_list_geno[chr].variants():
 				X_A, X_D = sg.nextSNP(variant, index=index)
@@ -229,7 +237,7 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 				tree_index = [[2*x,2*x+1] for x in index]
 				tree_index = [j for x in tree_index for j in x]
 
-				for chr in xrange(args.n_chr):
+				for chr in range(args.n_chr):
 					tree_sequence_to_write = tree_sequence_list_geno[chr].simplify(tree_index)
 					write.trees(args.out, tree_sequence_to_write, chr, m_geno[chr], n_pops, N, sim, args.vcf, index)
 
@@ -242,127 +250,3 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 		return chisq_A, chisq_D, chisq_AC, n, C_sim, index, y_cc, n_cases, T
 	else:
 		return chisq_A, chisq_D, chisq_AC, n, C_sim, index
-
-
-def the_rest(args, m_geno_start, m_geno, m_geno_total, N, y, C, tree_sequence_list_geno, sim, lN_A, lN_D, chisq_A, chisq_D, chisq_AC, n, C_sim, index, n_cases, T, y_cc, log):
-	# # Initialise the chi squared statistics.
-	# chisq_A, chisq_D, chisq_AC = np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1))
-
-	# if args.case_control:
-	# 	log.log("Running case-control simulation.")
-	# 	if args.prevalence is None:
-	# 		raise ValueError("prevalence must be set if running case-control analysis.")
-	# 	cases, controls, n_cases, n_controls, T = case_control(y, args.prevalence, args.sample_prevalence, N)
-	# 	n = n_cases + n_controls
-	# 	y_cc = np.zeros(n)
-	# 	y_cc[:n_cases] = 1
-	# 	index = cases + controls
-	# 	C_sim = C[index]
-
-	# 	if args.linear is False and args.ldsc is True:
-	# 		k = 0
-	# 		for chr in xrange(args.n_chr):
-	# 			for variant in tl.progress(args.progress_bars, tree_sequence_list_geno[chr].variants(), total=m_geno[chr]):
-	# 				X_A, X_D = sg.nextSNP(variant, index = index)
-	# 				chisq_A[k] = sm.Logit(y_cc, sm.add_constant(X_A)).fit(disp=0).llr
-	# 				chisq_D[k] = sm.Logit(y_cc, sm.add_constant(X_D)).fit(disp=0).llr
-	# 				chisq_AC[k] = sm.Logit(y_cc, sm.add_constant(C_sim * X_A)).fit(disp=0).llr
-	# 				k += 1
-
-	# if ( ((args.case_control is False) or (args.case_control is True and args.linear is True)) and args.ldsc is True ):
-	# 	if args.case_control:
-	# 		log.log("Warning: running linear regression for case-control.")
-	# 		y = (y_cc - np.mean(y_cc)) / np.std(y_cc)
-	# 		index = cases + controls
-	# 		C_sim = C[index]
-	# 	else:
-	# 		index = None
-	# 		C_sim = C
-	# 		n = N
-
-	# 	# Then use these ys to determine beta hats.
-	# 	k = 0
-	# 	for chr in xrange(args.n_chr):
-	# 		log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
-	# 		for variant in tree_sequence_list_geno[chr].variants():
-	# 			X_A, X_D = sg.nextSNP(variant, index=index)
-	# 			# Then sum to get the effect size on the phenotype.
-	# 			chisq_A[k] = np.dot(y.reshape(1,n), X_A)**2 / n
-	# 			chisq_D[k] = np.dot(y.reshape(1,n), X_D)**2 / n
-	# 			chisq_AC[k] = np.dot(y.reshape(1,n), C_sim * X_A)**2 / n
-	# 			k += 1
-
-	# if args.write_pheno or args.write_trees:
-	# 	if args.case_control:
-	# 		sample_ID = index
-	# 		y = y_cc.astype(int)
-
-	# 		if args.write_trees:
-	# 			tree_index = [[2*x,2*x+1] for x in index]
-	# 			tree_index = [j for x in tree_index for j in x]
-
-	# 			for chr in xrange(args.n_chr):
-	# 				tree_sequence_to_write = tree_sequence_list_geno[chr].simplify(tree_index)
-	# 				write.trees(args.out, tree_sequence_to_write, chr, m_geno[chr], n_pops, N, sim, args.vcf, index)
-
-	# 	else:
-	# 		sample_ID = np.arange(N)
-	# 	df_pheno=pd.DataFrame({'sample_ID':sample_ID, 'phenotype':y})
-	# 	df_pheno.to_csv(args.out + ".sim" + str(sim+1) + '.pheno.tsv', sep='\t', header=True, index=False)
-
-
-	# print chisq_A
-	# print chisq_D
-	# print chisq_AC
-	# If the optional argument to obtain LD scores from a random sub-sample of the population, set the indexing of this 
-	# sub-sampling here.
-	if args.ldsc:
-		if args.ldscore_within_sample is True and args.case_control is True: # DEV: Currently we have no ascertainment for continuous traits coded up.
-			if args.ldscore_sampling_prop is None:
-				ldsc_index = index
-				n_ldsc = n
-			else:
-				log.log('Using a subset of individuals from the sampled tree to determine LD scores - LD score sampling proportion: {ld}'.format(ld=args.ldscore_sampling_prop))
-				n_ldsc = int(n*args.ldscore_sampling_prop)
-				ldsc_index = random.sample(index, n_ldsc)
-
-			lN_A, lN_D = ld.get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_geno, n_ldsc, ldsc_index, sim, log)
-
-		print lN_A
-		# Intercept options for the regression.
-		intercept_h2 = [None]
-		if args.free_and_no_intercept: intercept_h2 = [None, 1]
-		if args.no_intercept: intercept_h2 = [1]
-
-		# Run the regressions
-		log.log('Running LD score regressions.')
-		hsqhat_A, hsqhat_D, hsqhat_AC = [], [], []
-
-		for i in xrange(len(intercept_h2)):
-			hsqhat_A.append(reg.Hsq(chisq_A,
-				lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
-				np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-				n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
-
-			hsqhat_D.append(reg.Hsq(chisq_D,
-				lN_D.reshape((m_geno_total,1)), lN_D.reshape((m_geno_total,1)),
-				np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-				n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
-
-			hsqhat_AC.append(reg.Hsq(chisq_AC,
-				lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
-				np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
-				n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
-
-	if args.ldsc:
-		if args.case_control:
-			study_prevalence = n_cases / n
-			scaling = (args.prevalence**2 * (1-args.prevalence)**2) / ((study_prevalence * (1 - study_prevalence)) * sp.norm.pdf(T)**2)
-			return hsqhat_A, hsqhat_D, hsqhat_AC, n, C_sim, index, scaling, y_cc
-		else:
-			return hsqhat_A, hsqhat_D, hsqhat_AC, n, C_sim, index
-	else:	
-		if args.case_control:
-			return n, C_sim, index, scaling, y_cc
-		else:
-			return n, C_sim, index

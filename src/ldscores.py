@@ -13,7 +13,7 @@ def getBlockLefts(coords, max_dist):
     M = len(coords)
     j = 0
     block_left = np.zeros(M)
-    for i in xrange(M):
+    for i in range(M):
         while j < M and abs(coords[j] - coords[i]) > max_dist:
             j += 1
         block_left[i] = j
@@ -34,78 +34,78 @@ def corSumVarBlocks(variants, block_left, c, m, N, ldsc_index):
 	b = int(np.ceil(b/c)*c)  # Round up to a multiple of c
 
 	if b > m:
-	    c = 1
-	    b = m
+		c = 1
+		b = m
 	l_A = 0  # l_A := index of leftmost SNP in matrix A
 
 	k = 0
 	
 	A = np.empty((N,b))
 	while k < b:
-		variant = variants.next()
+		variant = variants.__next__()
 		A[:,k] = sg.nextSNP_add(variant, index=ldsc_index)
 		k += 1
 
 	rfuncAB = np.zeros((b, c))
 	rfuncBB = np.zeros((c, c))
 	# Chunk inside of block
-	for l_B in xrange(0, b, c):  # l_B := index of leftmost SNP in matrix B
-	    B = A[:, l_B:l_B+c]
-	    np.dot(A.T, B / N, out=rfuncAB)
-	    rfuncAB = l2(rfuncAB, N)
-	    cor_sum_A[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
-	    cor_sum_D[l_A:l_A+b] += np.sum(np.copy(rfuncAB)**2, axis=1)
+	for l_B in range(0, b, c):  # l_B := index of leftmost SNP in matrix B
+		B = A[:, l_B:l_B+c]
+		np.dot(A.T, B / N, out=rfuncAB)
+		rfuncAB = l2(rfuncAB, N)
+		cor_sum_A[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
+		cor_sum_D[l_A:l_A+b] += np.sum(np.copy(rfuncAB)**2, axis=1)
 
 	# Chunk to right of block
 	b0 = int(b)
 	md = int(c*np.floor(m/c))
 	end = md + 1 if md != m else md
 
-	for l_B in xrange(b0, end, c):
-	    # Update the block
-	    old_b = b
+	for l_B in range(b0, end, c):
+		# Update the block
+		old_b = b
 
-	    b = block_sizes[l_B]
-	    if l_B > b0 and b > 0:
-	        # block_size can't increase more than c
-	        # block_size can't be less than c unless it is zero
-	        # Both of these things make sense
-	        A = np.hstack((A[:, old_b-b+c:old_b], B))
-	        l_A += old_b-b+c
-	    elif l_B == b0 and b > 0:
-	        A = A[:, b0-b:b0]
-	        l_A = b0-b
-	    elif b == 0:  # no SNPs to left in window, e.g., after a sequence gap
-	        A = np.array(()).reshape((N, 0))
-	        l_A = l_B
-	    if l_B == md:
-	        c = m - md
-	        rfuncAB = np.zeros((b, c))
-	        rfuncBB = np.zeros((c, c))
-	    if b != old_b:
-	        rfuncAB = np.zeros((b, c))
+		b = block_sizes[l_B]
+		if l_B > b0 and b > 0:
+			# block_size can't increase more than c
+			# block_size can't be less than c unless it is zero
+			# Both of these things make sense
+			A = np.hstack((A[:, old_b-b+c:old_b], B))
+			l_A += old_b-b+c
+		elif l_B == b0 and b > 0:
+			A = A[:, b0-b:b0]
+			l_A = b0-b
+		elif b == 0:  # no SNPs to left in window, e.g., after a sequence gap
+			A = np.array(()).reshape((N, 0))
+			l_A = l_B
+		if l_B == md:
+			c = m - md
+			rfuncAB = np.zeros((b, c))
+			rfuncBB = np.zeros((c, c))
+		if b != old_b:
+			rfuncAB = np.zeros((b, c))
 
-	    k = 0
-	    B = np.empty((N,c))
-	    while k < c:
-			variant = variants.next()
+		k = 0
+		B = np.empty((N,c))
+		while k < c:
+			variant = variants.__next__()
 			B[:,k] = sg.nextSNP_add(variant, index=ldsc_index)
 			k += 1
 
-	    np.dot(A.T, B / N, out=rfuncAB)
-	    rfuncAB = l2(rfuncAB, N)
-	    
-	    cor_sum_A[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
-	    cor_sum_A[l_B:l_B+c] += np.sum(rfuncAB, axis=0)
-	    
-	    rfuncAB2 = np.copy(rfuncAB)**2
-	    cor_sum_D[l_A:l_A+b] += np.sum(rfuncAB2, axis=1)
-	    cor_sum_D[l_B:l_B+c] += np.sum(rfuncAB2, axis=0)
-	    
-	    np.dot(B.T, B / N, out=rfuncBB)
-	    rfuncBB = l2(rfuncBB, N)
-	    cor_sum_A[l_B:l_B+c] += np.sum(rfuncBB, axis=0)
-	    cor_sum_D[l_B:l_B+c] += np.sum(np.copy(rfuncBB)**2, axis=0)
+		np.dot(A.T, B / N, out=rfuncAB)
+		rfuncAB = l2(rfuncAB, N)
+
+		cor_sum_A[l_A:l_A+b] += np.sum(rfuncAB, axis=1)
+		cor_sum_A[l_B:l_B+c] += np.sum(rfuncAB, axis=0)
+
+		rfuncAB2 = np.copy(rfuncAB)**2
+		cor_sum_D[l_A:l_A+b] += np.sum(rfuncAB2, axis=1)
+		cor_sum_D[l_B:l_B+c] += np.sum(rfuncAB2, axis=0)
+
+		np.dot(B.T, B / N, out=rfuncBB)
+		rfuncBB = l2(rfuncBB, N)
+		cor_sum_A[l_B:l_B+c] += np.sum(rfuncBB, axis=0)
+		cor_sum_D[l_B:l_B+c] += np.sum(np.copy(rfuncBB)**2, axis=0)
 
 	return cor_sum_A, cor_sum_D
 
@@ -113,9 +113,9 @@ def get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_ge
 
 	lN_A, lN_D = np.ones(m_geno_total), np.ones(m_geno_total)
 
-	for chr in xrange(args.n_chr):
+	for chr in range(args.n_chr):
 		log.log('Determining LD scores in chromosome {chr}.'.format(chr=chr+1))
-		coords = np.array(xrange(m_geno[chr]))
+		coords = np.array(range(m_geno[chr]))
 		block_left = getBlockLefts(coords, args.ld_wind_snps)
 		
 		start_time=time.time()

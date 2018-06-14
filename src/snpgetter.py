@@ -2,10 +2,11 @@ from __future__ import division
 import numpy as np
 
 def nextSNP(variant, index=None):
+
 	if index is None:
-		var_tmp = np.array(map(int, variant.genotypes[0::2])) + np.array(map(int, variant.genotypes[1::2]))
+		var_tmp = np.array(variant.genotypes[0::2].astype(int)) + np.array(variant.genotypes[1::2].astype(int))
 	else:
-		var_tmp = np.array(map(int, variant.genotypes[0::2][index])) + np.array(map(int, variant.genotypes[1::2][index]))
+		var_tmp = np.array(variant.genotypes[0::2][index].astype(int)) + np.array(variant.genotypes[1::2][index].astype(int))
 	
 	n = len(var_tmp)
 	# Additive term.
@@ -24,9 +25,9 @@ def nextSNP(variant, index=None):
 def nextSNP_add(variant, index=None):
 	
 	if index is None:
-		var_tmp = np.array(map(int, variant.genotypes[0::2])) + np.array(map(int, variant.genotypes[1::2]))
+		var_tmp = np.array(variant.genotypes[0::2].astype(int)) + np.array(variant.genotypes[1::2].astype(int))
 	else:
-		var_tmp = np.array(map(int, variant.genotypes[0::2][index])) + np.array(map(int, variant.genotypes[1::2][index]))
+		var_tmp = np.array(variant.genotypes[0::2][index].astype(int)) + np.array(variant.genotypes[1::2][index].astype(int))
 
 	# Additive term.
 	mean_X = np.mean(var_tmp)
