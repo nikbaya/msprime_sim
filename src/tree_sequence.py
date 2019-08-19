@@ -19,7 +19,7 @@ def initialise(args):
 	return args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start
 
 def get_common_mutations_ts(args, tree_sequence, log):
-	
+
 	common_sites = msprime.SiteTable()
 	common_mutations = msprime.MutationTable()
 
@@ -27,44 +27,40 @@ def get_common_mutations_ts(args, tree_sequence, log):
 	n_haps = tree_sequence.get_sample_size()
 	log.log('Determining sites > MAF cutoff {m}'.format(m=args.maf))
 
+	tables = tree_sequence.dump_tables()
+        tables.mutations.clear()
+        tables.sites.clear()
 	for tree in tree_sequence.trees():
 		for site in tree.sites():
 			f = tree.get_num_leaves(site.mutations[0].node) / n_haps
 			if f > args.maf and f < 1-args.maf:
-				common_site_id = common_sites.add_row(
+				common_site_id = tables.sites.add_row(
 					position=site.position,
 					ancestral_state=site.ancestral_state)
-				common_mutations.add_row(
+				tables.mutations.add_row(
 					site=common_site_id,
 					node=site.mutations[0].node,
 					derived_state=site.mutations[0].derived_state)
-	tables = tree_sequence.dump_tables()
-	new_tree_sequence = msprime.load_tables(
-		nodes=tables.nodes, edges=tables.edges,
-		sites=common_sites, mutations=common_mutations)
+	new_tree_sequence = tables.tree_sequence()
 	return new_tree_sequence
 
 def set_mutations_in_tree(tree_sequence, p_causal):
 
-	causal_sites = msprime.SiteTable()
-	causal_mutations = msprime.MutationTable()
+        tables = tree_sequence.dump_tables()
 
 	# Get the causal mutations.
 	for site in tree_sequence.sites():
 		if np.random.random_sample() < p_causal:
-			causal_site_id = causal_sites.add_row(
+			causal_site_id = tables.sites.add_row(
 				position=site.position,
 				ancestral_state=site.ancestral_state)
-			causal_mutations.add_row(
+			tables.mutations.add_row(
 				site=causal_site_id,
 				node=site.mutations[0].node,
 				derived_state=site.mutations[0].derived_state)
 
-	tables = tree_sequence.dump_tables()
-	new_tree_sequence = msprime.load_tables(
-		nodes=tables.nodes, edges=tables.edges,
-		sites=causal_sites, mutations=causal_mutations)
-	m_causal = new_tree_sequence.get_num_mutations()
+	new_tree_sequence = tables.tree_sequence()
+	m_causal = new_tree_sequence.num_mutations
 
 	return new_tree_sequence, m_causal
 
@@ -201,7 +197,7 @@ def simulate_tree_sequence(args, rec_map_list, log):
 			m_geno_total = m_total
 
 		# Do you want to write the files to .vcf?
-		# The trees shouldn't be written at this point if we're 
+		# The trees shouldn't be written at this point if we're
 		# using ascertained samples (which are always case control),
 		# as it'll write ALL the samples to disk rather than just those that we sample.
 		if args.write_trees and args.case_control is False:
