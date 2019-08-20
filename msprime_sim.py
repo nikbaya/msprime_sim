@@ -164,7 +164,7 @@ parser.add_argument('--Ne', default=10000, type=int,
 	help='Effective population size [Default: 10,000].')
 parser.add_argument('--sim-type', default='standard', type=str,
     help='Type of simulation to run. Currently recognises "standard",'
-    '"out-of-africa" and "out-of-africa-all-pops" [Default: standard]')
+    '"out_of_africa" and "out_of_africa_all_pops" [Default: standard]')
 parser.add_argument('--maf', default=0.05, type=float,
     help='The minor allele frequency cut-off [Default: 0.05].')
 parser.add_argument('--rec', default=2e-8, type=float,

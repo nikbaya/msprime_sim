@@ -28,8 +28,8 @@ def get_common_mutations_ts(args, tree_sequence, log):
 	log.log('Determining sites > MAF cutoff {m}'.format(m=args.maf))
 
 	tables = tree_sequence.dump_tables()
-        tables.mutations.clear()
-        tables.sites.clear()
+	tables.mutations.clear()
+	tables.sites.clear()
 	for tree in tree_sequence.trees():
 		for site in tree.sites():
 			f = tree.get_num_leaves(site.mutations[0].node) / n_haps
@@ -46,7 +46,7 @@ def get_common_mutations_ts(args, tree_sequence, log):
 
 def set_mutations_in_tree(tree_sequence, p_causal):
 
-        tables = tree_sequence.dump_tables()
+	tables = tree_sequence.dump_tables()
 
 	# Get the causal mutations.
 	for site in tree_sequence.sites():
