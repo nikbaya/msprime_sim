@@ -328,8 +328,8 @@ class Hsq(LD_Score_Regression):
             ratio_se = intercept_se / (mean_chisq - 1)
             ratio = (intercept - 1) / (mean_chisq - 1)
         else:
-            ratio = 'NA'
-            ratio_se = 'NA'
+            ratio = None
+            ratio_se = None
 
         return ratio, ratio_se
 
@@ -364,6 +364,20 @@ class Hsq(LD_Score_Regression):
                 out.append('Ratio: NA (mean chi^2 < 1)')
 
         return remove_brackets('\n'.join(out))
+
+    def to_print_to_file(self, c=1):
+
+        h2_z = self.tot / self.tot_se 
+
+        if self.constrain_intercept is False:
+            int_z = (self.intercept - 1.0) / self.intercept_se 
+            p_z = norm.sf(int_z)
+            return [self.mean_chisq, self.lambda_gc,self.intercept, self.intercept_se,
+                int_z, norm.sf(int_z), self.ratio, self.ratio_se, self.tot, self.tot_se,
+                self.tot * c, self.tot_se * c, h2_z, norm.sf(h2_z)]
+        else:
+            return [self.mean_chisq, self.lambda_gc, self.intercept, self.tot, self.tot_se,
+                self.tot * c, self.tot_se * c, h2_z, norm.sf(h2_z)]
 
     def _update_weights(self, ld, w_ld, N, M, hsq, intercept, ii=None):
         if intercept is None:

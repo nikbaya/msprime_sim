@@ -32,15 +32,47 @@ def simulate_tree_and_betas(args, log):
 	args, rec_map_list = tl.initial_warnings_and_parsing(args, log)
 
 	h2_ldsc = np.zeros(args.n_sims, dtype=np.dtype([
-		('h2_A', float), ('int_A', float),
-		('h2_D', float), ('int_D', float),
-		('h2_AC', float), ('int_AC', float)]))
+		# Additive
+		('mean_chi2_A', float), ('lambdaGC_A', float),
+		('int_A', float), ('int_A_se', float), ('int_A_z', float), ('int_A_p', float),
+		('ratio_A', float), ('ratio_A_se', float),
+		('h2_A_obs', float), ('h2_A_obs_se', float), ('h2_A_liab', float), ('h2_A_liab_se', float),
+		('h2_A_z', float), ('h2_A_p', float),
+		# Dominance
+		('mean_chi2_D', float), ('lambdaGC_D', float),
+		('int_D', float), ('int_D_se', float), ('int_D_z', float), ('int_D_p', float),
+		('ratio_D', float), ('ratio_D_se', float),
+		('h2_D_obs', float), ('h2_D_obs_se', float), ('h2_D_liab', float), ('h2_D_liab_se', float),
+		('h2_D_z', float), ('h2_D_p', float),
+		# GxE
+		('mean_chi2_AC', float), ('lambdaGC_AC', float),
+		('int_AC', float), ('int_AC_se', float), ('int_AC_z', float), ('int_AC_p', float),
+		('ratio_AC', float), ('ratio_AC_se', float),
+		('h2_AC_obs', float), ('h2_AC_obs_se', float), ('h2_AC_liab', float), ('h2_AC_liab_se', float),
+		('h2_AC_z', float), ('h2_AC_p', float)
+		]))
 	h2_pcgc = np.zeros(args.n_sims, dtype=np.dtype([
 		('h2_A', float), ('h2_D', float), ('h2_AC', float)]))
 	h2_ldsc_int = np.zeros(args.n_sims, dtype=np.dtype([
-		('h2_A', float), ('int_A', float),
-		('h2_D', float), ('int_D', float),
-		('h2_AC', float), ('int_AC', float)]))
+		# Additive
+		('mean_chi2_A', float), ('lambdaGC_A', float),
+		('int_A', float), ('int_A_se', float), ('int_A_z', float), ('int_A_p', float),
+		('ratio_A', float), ('ratio_A_se', float),
+		('h2_A_obs', float), ('h2_A_obs_se', float), ('h2_A_liab', float), ('h2_A_liab_se', float),
+		('h2_A_z', float), ('h2_A_p', float),
+		# Dominance
+		('mean_chi2_D', float), ('lambdaGC_D', float),
+		('int_D', float), ('int_D_se', float), ('int_D_z', float), ('int_D_p', float),
+		('ratio_D', float), ('ratio_D_se', float),
+		('h2_D_obs', float), ('h2_D_obs_se', float), ('h2_D_liab', float), ('h2_D_liab_se', float),
+		('h2_D_z', float), ('h2_D_p', float),
+		# GxE
+		('mean_chi2_AC', float), ('lambdaGC_AC', float),
+		('int_AC', float), ('int_AC_se', float), ('int_AC_z', float), ('int_AC_p', float),
+		('ratio_AC', float), ('ratio_AC_se', float),
+		('h2_AC_obs', float), ('h2_AC_obs_se', float), ('h2_AC_liab', float), ('h2_AC_liab_se', float),
+		('h2_AC_z', float), ('h2_AC_p', float)
+		]))
 
 	for sim in range(args.n_sims):
 		if (sim == 0 or args.fix_genetics is False):
@@ -123,12 +155,41 @@ def simulate_tree_and_betas(args, log):
 			pcgc.pcgc(args, sim, tree_sequence_list_geno, y, h2_pcgc, n, C_sim, index, m_geno_total, scaling, log)
 
 		if args.ldsc is True:
-			h2_ldsc['h2_A'][sim], h2_ldsc['h2_D'][sim], h2_ldsc['h2_AC'][sim] = np.array([hsqhat_A[0].tot, hsqhat_D[0].tot, hsqhat_AC[0].tot]) * scaling
-			h2_ldsc['int_A'][sim], h2_ldsc['int_D'][sim], h2_ldsc['int_AC'][sim] = hsqhat_A[0].intercept, hsqhat_D[0].intercept, hsqhat_AC[0].intercept
+			# Additive
+			h2_ldsc['mean_chi2_A'][sim], h2_ldsc['lambdaGC_A'][sim], h2_ldsc['int_A'][sim], \
+			h2_ldsc['int_A_se'][sim], h2_ldsc['int_A_z'][sim], h2_ldsc['int_A_p'][sim], \
+			h2_ldsc['ratio_A'][sim], h2_ldsc['ratio_A_se'][sim], h2_ldsc['h2_A_obs'][sim], h2_ldsc['h2_A_obs_se'][sim], \
+			h2_ldsc['h2_A_liab'][sim], h2_ldsc['h2_A_liab_se'][sim], h2_ldsc['h2_A_z'][sim], \
+			h2_ldsc['h2_A_p'][sim] = hsqhat_A[0].to_print_to_file(scaling)
+			# Dominance
+			h2_ldsc['mean_chi2_D'][sim], h2_ldsc['lambdaGC_D'][sim], h2_ldsc['int_D'][sim], \
+			h2_ldsc['int_D_se'][sim], h2_ldsc['int_D_z'][sim], h2_ldsc['int_D_p'][sim], \
+			h2_ldsc['ratio_D'][sim], h2_ldsc['ratio_D_se'][sim], h2_ldsc['h2_D_obs'][sim], h2_ldsc['h2_D_obs_se'][sim], \
+			h2_ldsc['h2_D_liab'][sim], h2_ldsc['h2_D_liab_se'][sim], h2_ldsc['h2_D_z'][sim], \
+			h2_ldsc['h2_D_p'][sim] = hsqhat_D[0].to_print_to_file(scaling)
+			# GxE
+			h2_ldsc['mean_chi2_AC'][sim], h2_ldsc['lambdaGC_AC'][sim], h2_ldsc['int_AC'][sim], \
+			h2_ldsc['int_AC_se'][sim], h2_ldsc['int_AC_z'][sim], h2_ldsc['int_AC_p'][sim], \
+			h2_ldsc['ratio_AC'][sim], h2_ldsc['ratio_AC_se'][sim], h2_ldsc['h2_AC_obs'][sim], h2_ldsc['h2_AC_obs_se'][sim], \
+			h2_ldsc['h2_AC_liab'][sim], h2_ldsc['h2_AC_liab_se'][sim], h2_ldsc['h2_AC_z'][sim], \
+			h2_ldsc['h2_AC_p'][sim] = hsqhat_AC[0].to_print_to_file(scaling)
 
 			if args.free_and_no_intercept:
-				h2_ldsc_int['h2_A'][sim], h2_ldsc_int['h2_D'][sim], h2_ldsc_int['h2_AC'][sim] = np.array([hsqhat_A[1].tot, hsqhat_D[1].tot, hsqhat_AC[1].tot]) * scaling
-				h2_ldsc_int['int_A'][sim], h2_ldsc_int['int_D'][sim], h2_ldsc_int['int_AC'][sim] = hsqhat_A[1].intercept, hsqhat_D[1].intercept, hsqhat_AC[1].intercept
+				# Additive
+				h2_ldsc_int['mean_chi2_A'][sim], h2_ldsc_int['lambdaGC_A'][sim], h2_ldsc_int['int_A'][sim], \
+				h2_ldsc_int['h2_A_obs'][sim], h2_ldsc_int['h2_A_obs_se'][sim], \
+				h2_ldsc_int['h2_A_liab'][sim], h2_ldsc_int['h2_A_liab_se'][sim], \
+				h2_ldsc_int['h2_A_z'][sim], h2_ldsc_int['h2_A_p'][sim] = hsqhat_A[1].to_print_to_file(scaling)
+				# Dominance
+				h2_ldsc_int['mean_chi2_D'][sim], h2_ldsc_int['lambdaGC_D'][sim], h2_ldsc_int['int_D'][sim], \
+				h2_ldsc_int['h2_D_obs'][sim], h2_ldsc_int['h2_D_obs_se'][sim],\
+				h2_ldsc_int['h2_D_liab'][sim], h2_ldsc_int['h2_D_liab_se'][sim], \
+				h2_ldsc_int['h2_D_z'][sim], h2_ldsc_int['h2_D_p'][sim] = hsqhat_D[1].to_print_to_file(scaling)
+				# GxE
+				h2_ldsc_int['mean_chi2_AC'][sim], h2_ldsc_int['lambdaGC_AC'][sim], h2_ldsc_int['int_AC'][sim], \
+				h2_ldsc_int['h2_AC_obs'][sim], h2_ldsc_int['h2_AC_obs_se'][sim], \
+				h2_ldsc_int['h2_AC_liab'][sim], h2_ldsc_int['h2_AC_liab_se'][sim], \
+				h2_ldsc_int['h2_AC_z'][sim], h2_ldsc_int['h2_AC_p'][sim] = hsqhat_AC[1].to_print_to_file(scaling)
 
 	return h2_ldsc, h2_pcgc, h2_ldsc_int
 
@@ -272,26 +333,80 @@ if __name__ == '__main__':
 			
 			df = pd.DataFrame.from_records(np.c_[h2_pcgc['h2_A'], h2_pcgc['h2_D'], h2_pcgc['h2_AC']])
 			df.columns = ['h2_A', 'h2_D', 'h2_AC']
-			df.to_csv(out_fname_pcgc, sep='\t', header=True, index=False, float_format='%.3f')
+			df.to_csv(out_fname_pcgc, sep='\t', header=True, index=False, float_format='%.4g')
 		else:
 			h2_ldsc, h2_pcgc, h2_ldsc_int = simulate_tree_and_betas(args, log)
 
 		df = pd.DataFrame.from_records(np.c_[
-			h2_ldsc['h2_A'], h2_ldsc['int_A'],
-			h2_ldsc['h2_D'], h2_ldsc['int_D'],
-			h2_ldsc['h2_AC'], h2_ldsc['int_AC']])
-		df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_AC', 'int_AC']
-		df.to_csv(out_fname, sep='\t', header=True, index=False, float_format='%.3f')
+				h2_ldsc['mean_chi2_A'], h2_ldsc['lambdaGC_A'], h2_ldsc['int_A'],
+				h2_ldsc['int_A_se'], h2_ldsc['int_A_z'], h2_ldsc['int_A_p'],
+				h2_ldsc['ratio_A'], h2_ldsc['ratio_A_se'], h2_ldsc['h2_A_obs'], h2_ldsc['h2_A_obs_se'],
+				h2_ldsc['h2_A_liab'], h2_ldsc['h2_A_liab_se'], h2_ldsc['h2_A_z'], h2_ldsc['h2_A_p'],
+				# Dominance
+				h2_ldsc['mean_chi2_D'], h2_ldsc['lambdaGC_D'], h2_ldsc['int_D'],
+				h2_ldsc['int_D_se'], h2_ldsc['int_D_z'], h2_ldsc['int_D_p'],
+				h2_ldsc['ratio_D'], h2_ldsc['ratio_D_se'], h2_ldsc['h2_D_obs'], h2_ldsc['h2_D_obs_se'],
+				h2_ldsc['h2_D_liab'], h2_ldsc['h2_D_liab_se'], h2_ldsc['h2_D_z'], h2_ldsc['h2_D_p'],
+				# GxE
+				h2_ldsc['mean_chi2_AC'], h2_ldsc['lambdaGC_AC'], h2_ldsc['int_AC'],
+				h2_ldsc['int_AC_se'], h2_ldsc['int_AC_z'], h2_ldsc['int_AC_p'],
+				h2_ldsc['ratio_AC'], h2_ldsc['ratio_AC_se'], h2_ldsc['h2_AC_obs'], h2_ldsc['h2_AC_obs_se'],
+				h2_ldsc['h2_AC_liab'], h2_ldsc['h2_AC_liab_se'], h2_ldsc['h2_AC_z'], h2_ldsc['h2_AC_p']
+			])
+
+		df.columns = [
+			# Additive
+			'mean_chi2_A', 'lambdaGC_A', 'int_A',
+			'int_A_se', 'int_A_z', 'int_A_p',
+			'ratio_A', 'ratio_A_se', 'h2_A_obs', 'h2_A_obs_se',
+			'h2_A_liab', 'h2_A_liab_se', 'h2_A_z','h2_A_p',
+			# Dominance
+			'mean_chi2_D', 'lambdaGC_D', 'int_D',
+			'int_D_se', 'int_D_z', 'int_D_p',
+			'ratio_D', 'ratio_D_se', 'h2_D_obs', 'h2_D_obs_se',
+			'h2_D_liab', 'h2_D_liab_se', 'h2_D_z', 'h2_D_p',
+			# GxE
+			'mean_chi2_AC', 'lambdaGC_AC', 'int_AC',
+			'int_AC_se', 'int_AC_z', 'int_AC_p',
+			'ratio_AC', 'ratio_AC_se', 'h2_AC_obs', 'h2_AC_obs_se',
+			'h2_AC_liab', 'h2_AC_liab_se', 'h2_AC_z', 'h2_AC_p'
+			]
+
+		df.to_csv(out_fname, sep='\t', header=True, index=False, float_format='%.4g')
 
 		if args.free_and_no_intercept:
 			out_fname = args.out + '.int.h2'
 
 			df = pd.DataFrame.from_records(np.c_[
-			h2_ldsc_int['h2_A'], h2_ldsc_int['int_A'],
-			h2_ldsc_int['h2_D'], h2_ldsc_int['int_D'],
-			h2_ldsc_int['h2_AC'], h2_ldsc_int['int_AC']])
-			df.columns = ['h2_A', 'int_A', 'h2_D', 'int_D', 'h2_AC', 'int_AC']
-			df.to_csv(out_fname, sep='\t', header=True, index=False, float_format='%.3f')
+				h2_ldsc_int['mean_chi2_A'], h2_ldsc_int['lambdaGC_A'], h2_ldsc_int['int_A'],
+				h2_ldsc_int['h2_A_obs'], h2_ldsc_int['h2_A_obs_se'],
+				h2_ldsc_int['h2_A_liab'], h2_ldsc_int['h2_A_liab_se'], h2_ldsc_int['h2_A_z'], h2_ldsc_int['h2_A_p'],
+				# Dominance
+				h2_ldsc_int['mean_chi2_D'], h2_ldsc_int['lambdaGC_D'], h2_ldsc_int['int_D'],
+				h2_ldsc_int['h2_D_obs'], h2_ldsc_int['h2_D_obs_se'],
+				h2_ldsc_int['h2_D_liab'], h2_ldsc_int['h2_D_liab_se'], h2_ldsc_int['h2_D_z'], h2_ldsc_int['h2_D_p'],
+				# GxE
+				h2_ldsc_int['mean_chi2_AC'], h2_ldsc_int['lambdaGC_AC'], h2_ldsc_int['int_AC'],
+				h2_ldsc_int['h2_AC_obs'], h2_ldsc_int['h2_AC_obs_se'],
+				h2_ldsc_int['h2_AC_liab'], h2_ldsc_int['h2_AC_liab_se'], h2_ldsc_int['h2_AC_z'], h2_ldsc_int['h2_AC_p']
+			])
+
+			df.columns = [
+				# Additive
+				'mean_chi2_A', 'lambdaGC_A', 'int_A',
+				'h2_A_obs', 'h2_A_obs_se', 'h2_A_liab', 'h2_A_liab_se',
+				'h2_A_z','h2_A_p',
+				# Dominance
+				'mean_chi2_D', 'lambdaGC_D', 'int_D',
+				'h2_D_obs', 'h2_D_obs_se', 'h2_D_liab', 'h2_D_liab_se',
+				'h2_D_z', 'h2_D_p',
+				# GxE
+				'mean_chi2_AC', 'lambdaGC_AC', 'int_AC',
+				'h2_AC_obs', 'h2_AC_obs_se', 'h2_AC_liab', 'h2_AC_liab_se',
+				'h2_AC_z', 'h2_AC_p'
+			]
+
+			df.to_csv(out_fname, sep='\t', header=True, index=False, float_format='%.4g')
 
 	except Exception:
 		ex_type, ex, tb = sys.exc_info()
