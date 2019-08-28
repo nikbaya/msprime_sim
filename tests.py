@@ -133,13 +133,13 @@ class TestUM(unittest.TestCase):
         
         # Restrict to subset of SNPs at random. This is stochastic.
         prop = 0.1
-        tree_sequence, m_causal = ts.set_mutations_in_tree(tree_sequence_list[0], prop)
+        tree_sequence, m_causal, restricted_index = ts.set_mutations_in_tree(tree_sequence_list[0], prop)
         prop_emp = tree_sequence.get_num_sites() / tree_sequence_list[0].get_num_sites()
         acc = prop / 10
         self.assertTrue(np.abs(prop_emp - prop) < acc)
         
         prop = 0.5
-        tree_sequence, m_causal = ts.set_mutations_in_tree(tree_sequence_list[0], prop)
+        tree_sequence, m_causal, restricted_index = ts.set_mutations_in_tree(tree_sequence_list[0], prop)
         prop_emp = tree_sequence.get_num_sites() / tree_sequence_list[0].get_num_sites()
         acc = prop / 10
         self.assertTrue(np.abs(prop_emp - prop) < acc)

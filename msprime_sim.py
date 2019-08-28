@@ -77,13 +77,13 @@ def simulate_tree_and_betas(args, log):
 	for sim in range(args.n_sims):
 		if (sim == 0 or args.fix_genetics is False):
 			if args.load_tree_sequence is None:
-				tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops  = ts.simulate_tree_sequence(args, rec_map_list, log)
+				tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops, genotyped_list_index  = ts.simulate_tree_sequence(args, rec_map_list, log)
 				if args.dump_trees:
 					for chr in range(args.n_chr):
 						dump_out = args.out + ".chr" + str(chr+1) + ".sim" + str(sim+1) + ".tree"
 						tree_sequence_list[chr].dump(dump_out)
 			else:
-				tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops = ts.load_tree_sequence(args, log)
+				tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops, genotyped_list_index = ts.load_tree_sequence(args, log)
 
 			# If we don't sample to get estimates of the LD scores, or run case control, then if fix_genetics is used we only need to calculate the LD scores once.
 			if args.ldsc and (args.ldscore_within_sample is False or args.case_control is False): # DEV: Currently we have no ascertainment for continuous traits coded up.
@@ -93,11 +93,17 @@ def simulate_tree_and_betas(args, log):
 					ldsc_index = None
 					n_ldsc = N
 				else:
-					log.log('Using a subset of individuals from the sampled tree to determine LD scores - LD score sampling proportion: {ld}'.format(ld=args.ldscore_sampling_prop))
 					n_ldsc = int(N*args.ldscore_sampling_prop)
+					log.log('Using a subset of {n} individuals from the sampled tree to determine LD scores - LD score sampling proportion: {ld}'.format(n=n_ldsc, ld=args.ldscore_sampling_prop))
 					ldsc_index = random.sample(range(N), n_ldsc)
 
-				lN_A, lN_D = ld.get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_geno, n_ldsc, ldsc_index, sim, log)
+				if args.ldscores_evaluated_across_genotyped_snps:
+					lN_A, lN_D = ld.get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_geno, n_ldsc, ldsc_index, sim, log)
+				else:
+					# Initial hack - evaluate the LD-scores at all SNPs and then restrict to those that we care about. 
+					# Need to create an index of the genotyped SNPs on creation of the tree sequence
+					lN_A, lN_D = ld.get_ldscores(args, m, m_start, m_total, tree_sequence_list, n_ldsc, ldsc_index, sim, log)
+					lN_A, lN_D = lN_A[np.concatenate(genotyped_list_index, 0)], lN_D[np.concatenate(genotyped_list_index, 0)]
 
 		# Note that we pass the tree_sequence_list as potentially non-genotyped SNPs affect phenotype.
 		y, C = ph.get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log)
@@ -119,7 +125,12 @@ def simulate_tree_and_betas(args, log):
 						n_ldsc = int(n*args.ldscore_sampling_prop)
 						ldsc_index = random.sample(index, n_ldsc)
 
-					lN_A, lN_D = ld.get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_geno, n_ldsc, ldsc_index, sim, log)
+					if args.ldscores_evaluated_across_genotyped_snps:
+						lN_A, lN_D = ld.get_ldscores(args, m_geno, m_geno_start, m_geno_total, tree_sequence_list_geno, n_ldsc, ldsc_index, sim, log)
+					else:
+						lN_A, lN_D = ld.get_ldscores(args, m, m_start, m_total, tree_sequence_list, n_ldsc, ldsc_index, sim, log)
+						lN_A, lN_D = lN_A[np.concatenate(genotyped_list_index, 0)], lN_D[np.concatenate(genotyped_list_index, 0)]
+
 			else:
 				chisq_A, chisq_D, chisq_AC, n, C_sim, index = ph.get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 				scaling = 1
@@ -132,22 +143,35 @@ def simulate_tree_and_betas(args, log):
 			# Run the regressions
 			log.log('Running LD score regressions.')
 			hsqhat_A, hsqhat_D, hsqhat_AC = [], [], []
+			if args.ldscores_evaluated_across_genotyped_snps:
+				m_ldsc = m_geno_total
+			else:
+				m_ldsc = m_total
 
 			for i in range(len(intercept_h2)):
 				hsqhat_A.append(reg.Hsq(chisq_A,
 					lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
-					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_ldsc).reshape((1,1)),
 					n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
 
 				hsqhat_D.append(reg.Hsq(chisq_D,
 					lN_D.reshape((m_geno_total,1)), lN_D.reshape((m_geno_total,1)),
-					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_ldsc).reshape((1,1)),
 					n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
 
 				hsqhat_AC.append(reg.Hsq(chisq_AC,
 					lN_A.reshape((m_geno_total,1)), lN_A.reshape((m_geno_total,1)),
-					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_geno_total).reshape((1,1)),
+					np.tile(n,m_geno_total).reshape((m_geno_total,1)), np.array(m_ldsc).reshape((1,1)),
 					n_blocks = min(m_geno_total, args.n_blocks), intercept = intercept_h2[i]))
+
+				log.log('Additive h2 estimate: {h}'.format(h=hsqhat_A[i].tot))
+				if args.case_control:
+					log.log('Additive h2 estimate, liability scale: {h}'.format(h=scaling*hsqhat_A[i].tot))
+				log.log('Additive intercept estimate: {i}'.format(i=hsqhat_A[i].intercept))
+				log.log('Dominance h2 estimate: {h}'.format(h=hsqhat_D[i].tot))
+				if args.case_control:
+					log.log('Dominance h2 estimate, liability scale: {h}'.format(h=scaling*hsqhat_D[i].tot))
+				log.log('Dominance intercept estimate: {i}'.format(i=hsqhat_D[i].intercept))
 
 		if args.pcgc:
 			if args.case_control:
@@ -284,12 +308,15 @@ parser.add_argument('--ldscore-within-sample', default=False, action='store_true
 	help='Do you want to evaluate the LD scores using the case-control sample used to obtain the effect size estimates? '
 	'Note that this will result in LD scores being generated for each simulation, so may slow things down if ascertainment is '
 	'low and the sample size is large.')
+parser.add_argument('--ldscores-evaluated-across-genotyped-snps', default=False, action='store_true',
+	help='Do you want the summation of squared correlations to be over only the genotyped SNPs? If not, summation will be over '
+	'all SNPs')
 parser.add_argument('--ldsc', default=False, action='store_true',
 	help='Do we perform LD score regression?')
 parser.add_argument('--include-pop-strat', default=False, action='store_true',
 	help='Do we include population stratification in the contribution to the phenotype. As default, we randomly draw the mean from '
 	'a Normal with mean 0 and variance 1')
-parser.add_argument('--s2', default=0.1, type=float,
+parser.add_argument('--s2', default=0.0, type=float,
 	help='What is the clade associated variance in the phenotype?')
 parser.add_argument('--no-migration', default=False, action='store_true',
 	help='Turn off migration in the demographic history - currently only has an effect for \'out_of_africa\' in the sim-type flag')

@@ -41,7 +41,6 @@ def case_control(y, prevalence, sample_prevalence, N):
 		controls = controls[mask][random.sample(range(N - n_cases), n_controls)]
 
 	controls = sorted(controls)
-
 	return cases, controls, n_cases, n_controls, T
 
 def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
@@ -77,15 +76,18 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 	for chr in range(args.n_chr):
 		m_chr = int(tree_sequence_list[chr].get_num_mutations())
 		log.log('Picking causal variants and determining effect sizes in chromosome {chr}'.format(chr=chr+1))
+		log.log('p-causal is {p_causal}'.format(p_causal=args.p_causal))
 		
 		if (((1 + int(args.dominance) + int(args.gxe)) * args.p_causal) < 1) or args.same_causal_sites: # If the number of runs through the data is less than 1, run this speedup.
-			tree_sequence_pheno_A, m_causal_A = ts.set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+			log.log('Running speedup to ensure fewer runs through the data')
+			tree_sequence_pheno_A, m_causal_A, causal_A_index = ts.set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 			log.log('Picked {m} additive causal variants out of {mc}'.format(m=m_causal_A, mc=m_chr))
 
 			if args.same_causal_sites is False:
-				tree_sequence_pheno_D, m_causal_D = ts.set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+				log.log('Different causal sites for other heritability contributions')
+				tree_sequence_pheno_D, m_causal_D, causal_D_index = ts.set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 				if args.h2_D > 0: log.log('Picked {m} dominance causal variants out of {mc}'.format(m=m_causal_D, mc=m_chr))
-				tree_sequence_pheno_AC, m_causal_AC = ts.set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
+				tree_sequence_pheno_AC, m_causal_AC, causal_AC_index = ts.set_mutations_in_tree(tree_sequence_list[chr], args.p_causal)
 				if args.h2_AC > 0: log.log('Picked {m} gxe causal variants out of {mc}'.format(m=m_causal_AC, mc=m_chr))
 
 				if args.h2_A > 0:
@@ -120,6 +122,7 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 						y += C * X_A * beta_AC[k]
 						k += 1
 			else:
+				log.log('Same causal sites for other heritability contributions')
 				beta_A, beta_D, beta_AC = np.zeros(m_causal_A), np.zeros(m_causal_A), np.zeros(m_causal_A)  
 				if args.h2_A > 0:
 					beta_A = np.random.normal(loc=0, scale=np.sqrt(args.h2_A / (m_total * args.p_causal)), size=m_causal_A)
@@ -190,6 +193,7 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 			raise ValueError("prevalence must be set if running case-control analysis.")
 		cases, controls, n_cases, n_controls, T = case_control(y, args.prevalence, args.sample_prevalence, N)
 		n = n_cases + n_controls
+		log.log('Ascertaining for sample prevalence {s} from population prevalence {p}: {N} total samples'.format(s=args.sample_prevalence, p=args.prevalence, N=n))
 		y_cc = np.zeros(n)
 		y_cc[:n_cases] = 1
 		index = cases + controls

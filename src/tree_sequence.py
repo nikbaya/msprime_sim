@@ -7,6 +7,7 @@ import src.write as write
 def initialise(args):
 	tree_sequence_list = []
 	tree_sequence_list_geno = []
+	genotyped_list_index = []
 	m_total, m_geno_total = 0, 0
 	rec_map = None
 
@@ -16,7 +17,7 @@ def initialise(args):
 	m, m_geno = np.zeros(args.n_chr).astype(int), np.zeros(args.n_chr).astype(int)
 	m_start, m_geno_start = np.zeros(args.n_chr).astype(int), np.zeros(args.n_chr).astype(int)
 
-	return args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start
+	return args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start, genotyped_list_index
 
 def get_common_mutations_ts(args, tree_sequence, log):
 
@@ -30,6 +31,7 @@ def get_common_mutations_ts(args, tree_sequence, log):
 	tables = tree_sequence.dump_tables()
 	tables.mutations.clear()
 	tables.sites.clear()
+
 	for tree in tree_sequence.trees():
 		for site in tree.sites():
 			f = tree.get_num_leaves(site.mutations[0].node) / n_haps
@@ -47,10 +49,15 @@ def get_common_mutations_ts(args, tree_sequence, log):
 def set_mutations_in_tree(tree_sequence, p_causal):
 
 	tables = tree_sequence.dump_tables()
-
+	tables.mutations.clear()
+	tables.sites.clear()
+	
+	causal_bool_index = np.zeros(tree_sequence.num_mutations, dtype=bool)
 	# Get the causal mutations.
+	k = 0
 	for site in tree_sequence.sites():
 		if np.random.random_sample() < p_causal:
+			causal_bool_index[k] = True
 			causal_site_id = tables.sites.add_row(
 				position=site.position,
 				ancestral_state=site.ancestral_state)
@@ -58,16 +65,17 @@ def set_mutations_in_tree(tree_sequence, p_causal):
 				site=causal_site_id,
 				node=site.mutations[0].node,
 				derived_state=site.mutations[0].derived_state)
+		k = k+1
 
 	new_tree_sequence = tables.tree_sequence()
 	m_causal = new_tree_sequence.num_mutations
 
-	return new_tree_sequence, m_causal
+	return new_tree_sequence, m_causal, causal_bool_index
 
 def load_tree_sequence(args, log):
 
 	# Create a list to fill with tree_sequences.
-	args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start = initialise(args)
+	args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start, genotyped_list_index = initialise(args)
 	tree_sequence_list.append(msprime.load(args.load_tree_sequence))
 	args.n = int(tree_sequence_list[0].get_sample_size() / 2)
 	N = args.n
@@ -77,6 +85,8 @@ def load_tree_sequence(args, log):
 
 	common_mutations = []
 	n_haps = tree_sequence_list[0].get_sample_size()
+
+	log.log('n haplotypes read in: {n_haps}'.format(n_haps=n_haps))
 
 	# Get the mutations > MAF.
 	tree_sequence_list[0] = get_common_mutations_ts(args, tree_sequence_list[0], log)
@@ -89,8 +99,9 @@ def load_tree_sequence(args, log):
 
 	# If genotyped proportion is < 1.
 	if args.geno_prop is not None:
-		tree_sequence_tmp, m_geno_tmp = ts.set_mutations_in_tree(tree_sequence_list[0], args.geno_prop)
+		tree_sequence_tmp, m_geno_tmp, genotyped_index = set_mutations_in_tree(tree_sequence_list[0], args.geno_prop)
 		tree_sequence_list_geno.append(tree_sequence_tmp)
+		genotyped_list_index.append(genotyped_index)
 		m_geno[0] = int(m_geno_tmp)
 		m_geno_start[0] = m_geno_total
 		m_geno_total = m_geno[0]
@@ -98,16 +109,19 @@ def load_tree_sequence(args, log):
 		log.log('Running total of sites genotyped: {m}'.format(m=m_geno_total))
 	else:
 		tree_sequence_list_geno.append(tree_sequence_list[0])
+		genotyped_list_index.append(np.ones(tree_sequence_list[0].num_mutations))
 		m_geno[0] = m[0]
 		m_geno_start[0] = m_start[0]
 		m_geno_total = m_total
+		log.log('Number of sites genotyped in the generated data: {m}'.format(m=m_geno[0]))
+		log.log('Running total of sites genotyped: {m}'.format(m=m_geno_total))
 
-	return tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops
+	return tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops, genotyped_list_index
 
 def simulate_tree_sequence(args, rec_map_list, log):
 
 	# Create a list to fill with tree_sequences.
-	args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start = initialise(args)
+	args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start, genotyped_list_index = initialise(args)
 	N = args.n
 
 	# Choose the population demographic model to use.
@@ -183,8 +197,9 @@ def simulate_tree_sequence(args, rec_map_list, log):
 
 		# If genotyped proportion is < 1.
 		if args.geno_prop is not None:
-			tree_sequence_tmp, m_geno_tmp = set_mutations_in_tree(tree_sequence_list[chr], args.geno_prop)
+			tree_sequence_tmp, m_geno_tmp, genotyped_index = set_mutations_in_tree(tree_sequence_list[chr], args.geno_prop)
 			tree_sequence_list_geno.append(tree_sequence_tmp)
+			genotyped_list_index.append(genotyped_index)
 			m_geno[chr] = int(m_geno_tmp)
 			m_geno_start[chr] = m_geno_total
 			m_geno_total += m_geno[chr]
@@ -192,9 +207,12 @@ def simulate_tree_sequence(args, rec_map_list, log):
 			log.log('Running total of sites genotyped: {m}'.format(m=m_geno_total))
 		else:
 			tree_sequence_list_geno.append(tree_sequence_list[chr])
+			genotyped_list_index.append(np.ones(tree_sequence_list[chr].num_mutations, dtype=bool))
 			m_geno[chr] = m[chr]
 			m_geno_start[chr] = m_start[chr]
 			m_geno_total = m_total
+			log.log('Number of sites genotyped in the generated data: {m}'.format(m=m_geno[chr]))
+			log.log('Running total of sites genotyped: {m}'.format(m=m_geno_total))
 
 		# Do you want to write the files to .vcf?
 		# The trees shouldn't be written at this point if we're
@@ -204,4 +222,4 @@ def simulate_tree_sequence(args, rec_map_list, log):
 			log.log('Writing genotyped information to disk')
 			write.trees(args.out, tree_sequence_list_geno[chr], chr, m_geno[chr], n_pops, N, sim, args.vcf, np.arange(N))
 
-	return tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops
+	return tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops, genotyped_list_index

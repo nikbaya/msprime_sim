@@ -372,7 +372,7 @@ class Hsq(LD_Score_Regression):
         if self.constrain_intercept is False:
             int_z = (self.intercept - 1.0) / self.intercept_se 
             p_z = norm.sf(int_z)
-            return [self.mean_chisq, self.lambda_gc,self.intercept, self.intercept_se,
+            return [self.mean_chisq, self.lambda_gc, self.intercept, self.intercept_se,
                 int_z, norm.sf(int_z), self.ratio, self.ratio_se, self.tot, self.tot_se,
                 self.tot * c, self.tot_se * c, h2_z, norm.sf(h2_z)]
         else:

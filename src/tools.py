@@ -5,8 +5,9 @@ import msprime
 
 def initial_warnings_and_parsing(args, log):
 	if args.case_control:
+		log.log('Note that passed n={n} is overwritten by n_cases/prevalence={ncc}, for case control phenotypes'.format(n=args.n, ncc=int(args.n_cases / args.prevalence)))
 		args.n = int(args.n_cases / args.prevalence)
-		log.log('Required sample size is {N} to ensure the expected number of cases is {n}.'.format(N=args.n, n=args.n_cases))
+		log.log('Required sample size is {N} to ensure the expected number of cases is {n}.'.format(N=int(args.n), n=int(args.n_cases)))
 		if args.sample_prevalence is not None and (args.prevalence > args.sample_prevalence):
 			raise ValueError("Cannot set the sample prevalence lower than the population prevalence.")
 		if args.sample_prevalence is not None and ((args.prevalence * 1.1) > args.sample_prevalence):

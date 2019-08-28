@@ -18,5 +18,5 @@ class Logger(object):
 
     def log(self, msg):
         # Print to log file and stdout with a single command.
-        self.log_fh.write(msg)
+        self.log_fh.write('{msg}\n'.format(msg=msg))
         print(msg)
