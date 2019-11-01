@@ -17,7 +17,7 @@ def trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 	
 	# Create altered IDs an Family IDs to replace the .fam file that we will create.
 	fam_id = np.tile('msp', N)
-	index_old = [i for i in xrange(N)]
+	index_old = [i for i in range(N)]
 	# Have to change the '0' ID to something else, as plink doesn't like IIDs to be '0'.
 	index_old[0] = 'A'
 	# Similarly for the new list of indices, plink doesn't like IIDs to be '0'.
@@ -40,7 +40,7 @@ def trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 		os.system("sed -i.bak '1,/msp_0/ s/msp_0/msp_A/' " + vcf_name)
 		# Convert to Plink bed format - need to ensure that plink is in your path.
 		bfile_out = out + ".chr" + str(chr+1) + ".sim" + str(sim+1)
-		os.system("../plink/plink --vcf " + vcf_name + " --out " + bfile_out + " --make-bed")
+		os.system("../plink/plink --vcf " + vcf_name + " --double-id --out " + bfile_out + " --make-bed")
 		# Now, fix the chromosome number and the names of the mutations.
 		mut_names=np.core.defchararray.add('rs.' + str(chr+1) + ".", np.arange(1,m+1).astype('str'))
 		chr_vec=np.tile(chr+1, m)
@@ -66,9 +66,11 @@ def trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 
 	pop_ann = np.empty(N)
 
-	for pops in xrange(n_pops):
-		pop_leaves = tree_sequence.get_samples(population_id=pops)
-		pop_ann[map(int, [x/2 for x in pop_leaves[0::2]])] = pops
+	for pops in range(n_pops):
+#		pop_leaves = tree_sequence.get_samples(population_id=pops)
+                pop_leaves = tree_sequence.samples(population_id=pops).tolist()
+#                pop_ann[list(map(int, [x/2 for x in pop_leaves[0::2]]))] = pops
+                np.put(pop_ann, [int(x/2) for x in pop_leaves[0::2]], [pops]*len(pop_leaves[0::2]))
 
 	if chr==0:
 		df_pop=pd.DataFrame({'sample':sample_index, 'population':pop_ann.astype(int)})
