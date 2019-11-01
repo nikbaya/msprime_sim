@@ -118,7 +118,7 @@ def load_tree_sequence(args, log):
 
 	return tree_sequence_list, tree_sequence_list_geno, m, m_start, m_total, m_geno, m_geno_start, m_geno_total, N, n_pops, genotyped_list_index
 
-def simulate_tree_sequence(args, rec_map_list, log):
+def simulate_tree_sequence(args, rec_map_list, log, sim=0):
 
 	# Create a list to fill with tree_sequences.
 	args, tree_sequence_list, tree_sequence_list_geno, m_total, m_geno_total, rec_map, m, m_start, m_geno, m_geno_start, genotyped_list_index = initialise(args)
