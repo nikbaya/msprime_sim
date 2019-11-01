@@ -146,3 +146,11 @@ Force the use of linear regression when using the `--case-control` flag (Default
 Estimate heritability using PCGC. *Warning: slow and memory intensive* (Default: `False`).
 
   
+## Installation on Google Cloud VM
+```
+conda create -n msprime -y -q python=3 tqdm matplotlib pandas scipy # create conda environment named msprime and install msprime dependencies
+conda activate msprime # activate msprime environment
+conda install -c conda-forge msprime # install msprime Python package
+git clone https://github.com/astheeggeggs/msprime_sim.git # clone GitHub repo
+pip install parse statsmodels # install parse and statsmodel
+```
