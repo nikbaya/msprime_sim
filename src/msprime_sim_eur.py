@@ -86,7 +86,7 @@ N_sim = n
 
 
 N_haps = [0, int(N_sim/2) , 0]
-population_configurations, migration_matrix, demographic_events, N_A, n_pops, N_EU  = out_of_africa(N_haps=N_haps, no_migration=False)
+population_configurations, migration_matrix, demographic_events, N_A, n_pops, N_EU  = out_of_africa(N_haps=N_haps, no_migration=True)
 
 
 print(f'EU size: {N_EU}')
@@ -137,6 +137,9 @@ def get_common_mutations(maf, tree):
 					node=site.mutations[0].node,
 					derived_state=site.mutations[0].derived_state)
 	new_tree_sequence = tables.tree_sequence()
+	return new_tree_sequence
+
+ts = get_common_mutations(maf=maf, tree=ts)
 
 elapsed_maf = dt.now()-start_maf
 
