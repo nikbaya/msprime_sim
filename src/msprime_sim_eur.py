@@ -120,7 +120,7 @@ print(f'\n... Starting MAF filter (MAF>{maf}) ...\ntime: {start_maf}')
 def get_common_mutations(maf, tree_sequence):
 	ps = tree_sequence.get_sample_size()
 	n_haps = ps / 2
-	log.log('Determining sites > MAF cutoff {m}'.format(m=maf))
+	print('Determining sites > MAF cutoff {m}'.format(m=maf))
 
 	tables = tree_sequence.dump_tables()
 	tables.mutations.clear()
