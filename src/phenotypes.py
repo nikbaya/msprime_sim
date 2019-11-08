@@ -174,6 +174,12 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
                                 y += X_A * beta_A[k] + X_D * beta_D[k] + X_A * C * beta_AC[k]
                                 k += 1
 
+                if args.write_betas:
+                        np.savetxt(fname='true_beta_A.chr'+str(chr+1)+'.tsv',
+                                   X=beta_A,
+                                   fmt='%.3e',
+                                   delimiter='\t',
+                                   header='true_beta_A.chr'+str(chr+1))
         # Add noise to the y.
         y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_AC+args.s2)), size=N)
         # Finally, normalise.
@@ -225,19 +231,18 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, sim,
                 if args.write_betas:
                         intercept = np.ones(shape=(1,n)) # veector of intercepts for least sq linear regression
                         for chr in range(args.n_chr):
-                                variants = tree_sequence_list_geno[chr].variants()
-                                beta_A = np.empty(shape=len([v for v in variants]))
-                                print(beta_A.shape)
+                                beta_A = np.empty(shape=m_geno_total)
                                 log.log('Determining beta-hats in chromosome {chr}'.format(chr=chr+1))
-                                for variant in variants:
+                                for variant in tree_sequence_list_geno[chr].variants():
                                         X_A, X_D = sg.nextSNP(variant, index=index)
-                                        X_A_w_int = np.vstack((X_A.reshape(1, n), intercept))
-                                        beta_A[k] = np.linalg.lstsq(X_A_w_int, y.reshape(1,n))
-                                np.savetxt(fname='additive_betas.chr'+str(chr+1)+'.tsv', 
+                                        X_A_w_int = np.vstack((X_A.reshape(1, n), intercept)).T
+                                        coef, _, _, _ = np.linalg.lstsq(X_A_w_int, y.reshape(n,),rcond=None)
+                                        beta_A[k] = coef[0] # take only the beta for the genotypes
+                                np.savetxt(fname='marginal_beta_A.chr'+str(chr+1)+'.tsv', 
                                            X=beta_A,
                                            fmt='%.3e',
                                            delimiter='\t',
-                                           header='additive_betas')
+                                           header='marginal_beta_A.chr'+str(chr+1))
 
                 else:
                         for chr in range(args.n_chr):
