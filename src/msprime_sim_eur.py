@@ -150,7 +150,7 @@ start_vcf = dt.now()
 print('\n... Starting to write VCF ...\ntime: {:%H:%M:%S (%Y-%b-%d)}'.format(start_vcf))
 
 with gzip.open(f'{out}.vcf.gz','wt') as f:
-    ts.write_vcf(f)
+    ts.write_vcf(f, ploidy=2)
 
 elapsed_vcf = dt.now()-start_vcf
 print(f'... Elapsed time for VCF creation: {round(elapsed_vcf.seconds/60, 2)} min ...')
@@ -166,4 +166,4 @@ print(f'... Elapsed time for VCF -> PLINK conversion: {round(elapsed_plink.secon
 elapsed_total = dt.now()-start_sim
 print(f'... Total elapsed time for simulation: {round(elapsed_total.seconds/60, 2)} min ...') 
 
-subprocess.call(['rm', f'{out}.vcf.gz'])
+# subprocess.call(['rm', f'{out}.vcf.gz'])
