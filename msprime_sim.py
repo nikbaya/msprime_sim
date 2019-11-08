@@ -111,7 +111,6 @@ def simulate_tree_and_betas(args, log):
         phen_file = args.out + '.sim' + str(sim+1) + '.pheno.tsv'
         df_pheno.to_csv(phen_file, sep='\t', header=True, index=False)
         log.log('Evaluated phenotypes.')
-        print(args.vcf)
         if not args.vcf:
             bfile = args.out + '.chr1.sim' + str(sim+1) 
             os.system(args.plink + ' --bfile ' + bfile + ' --pheno ' + phen_file + ' --make-bed --out ' + bfile)
