@@ -106,14 +106,15 @@ def simulate_tree_and_betas(args, log):
                     lN_A, lN_D = lN_A[np.concatenate(genotyped_list_index, 0)], lN_D[np.concatenate(genotyped_list_index, 0)]
         # Note that we pass the tree_sequence_list as potentially non-genotyped SNPs affect phenotype.
         y, C = ph.get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log)
-        sample_ID = ['tsk_'+str(i) for i in range(N)]
-        df_pheno = pd.DataFrame({'FID':sample_ID,'IID':sample_ID,'phenotype':y})
-        phen_file = args.out + '.sim' + str(sim+1) + '.pheno.tsv'
-        df_pheno.to_csv(phen_file, sep='\t', header=True, index=False)
-        log.log('Evaluated phenotypes.')
-        if not args.vcf:
-            bfile = args.out + '.chr1.sim' + str(sim+1) 
-            os.system(args.plink + ' --bfile ' + bfile + ' --pheno ' + phen_file + ' --make-bed --out ' + bfile)
+        if not args.ldsc and args.write_pheno:
+            sample_ID = ['tsk_'+str(i) for i in range(N)]
+            df_pheno = pd.DataFrame({'FID':sample_ID,'IID':sample_ID,'phenotype':y})
+            phen_file = args.out + '.sim' + str(sim+1) + '.pheno.tsv'
+            df_pheno.to_csv(phen_file, sep='\t', header=True, index=False)
+            log.log('Evaluated phenotypes.')
+            if not args.vcf:
+                bfile = args.out + '.chr1.sim' + str(sim+1) 
+                os.system(args.plink + ' --bfile ' + bfile + ' --pheno ' + phen_file + ' --make-bed --out ' + bfile)
 
 
         # Need to alter this function - splitting further.
@@ -139,7 +140,7 @@ def simulate_tree_and_betas(args, log):
                         lN_A, lN_D = lN_A[np.concatenate(genotyped_list_index, 0)], lN_D[np.concatenate(genotyped_list_index, 0)]
 
             else:
-                chisq_A, chisq_D, chisq_AC, n, C_sim, index = ph.get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
+                chisq_A, chisq_D, chisq_AC, n, C_sim, index = ph.get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, sim, log)
                 scaling = 1
 
             # Intercept options for the regression.
@@ -343,6 +344,8 @@ parser.add_argument('--dump-trees', default=False, action='store_true',
     help='Do you want to dump the simulated tree sequences to disk in their native format?')
 parser.add_argument('--plink', default='plink',
     help='path to plink executable')
+parser.add_argument('--write-betas',default=False, action='store_true',
+        help='Write beta-hats from GWAS to a file. NOTE: Current implementation only accounts for additive effects')
 
 if __name__ == '__main__':
 
