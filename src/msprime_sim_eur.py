@@ -117,8 +117,9 @@ print(f'\n... Elapsed time for ts generation: {round(elapsed_ts.seconds/60, 2)} 
 start_maf = dt.now()
 print(f'\n... Starting MAF filter (MAF>{maf}) ...\ntime: {start_maf}')
 
-def get_common_mutations(maf, tree):
+def get_common_mutations(maf, tree_sequence):
 	ps = tree_sequence.get_sample_size()
+	n_haps = ps / 2
 	log.log('Determining sites > MAF cutoff {m}'.format(m=maf))
 
 	tables = tree_sequence.dump_tables()
@@ -139,7 +140,7 @@ def get_common_mutations(maf, tree):
 	new_tree_sequence = tables.tree_sequence()
 	return new_tree_sequence
 
-ts = get_common_mutations(maf=maf, tree=ts)
+ts = get_common_mutations(maf=maf, tree_sequence=ts)
 
 elapsed_maf = dt.now()-start_maf
 
