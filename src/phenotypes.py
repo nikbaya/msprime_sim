@@ -183,7 +183,7 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
 
 # Here, want to create a chi sq function, and an LD score function.
 
-def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log):
+def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, sim, log):
         # Initialise the chi squared statistics.
         chisq_A, chisq_D, chisq_AC = np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1)), np.zeros((m_geno_total,1))
 
@@ -222,17 +222,33 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, log)
 
                 # Then use these ys to determine beta hats.
                 k = 0
-                for chr in range(args.n_chr):
-                        log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
-                        for variant in tree_sequence_list_geno[chr].variants():
-                                X_A, X_D = sg.nextSNP(variant, index=index)
-                                # Then sum to get the effect size on the phenotype.
-                                chisq_A[k] = np.dot(y.reshape(1,n), X_A)**2 / n
-                                chisq_D[k] = np.dot(y.reshape(1,n), X_D)**2 / n
-                                chisq_AC[k] = np.dot(y.reshape(1,n), C_sim * X_A)**2 / n
-                                k += 1
-        print(args.write_pheno)
-        print(args.write_trees)
+                if args.write_betas:
+                        intercept = np.ones(shape=(1,n)) # veector of intercepts for least sq linear regression
+                        for chr in range(args.n_chr):
+                                variants = tree_sequence_list_geno[chr].variants()
+                                beta_A = np.empty(shape=len([v for v in variants]))
+                                print(beta_A.shape)
+                                log.log('Determining beta-hats in chromosome {chr}'.format(chr=chr+1))
+                                for variant in variants:
+                                        X_A, X_D = sg.nextSNP(variant, index=index)
+                                        X_A_w_int = np.vstack((X_A.reshape(1, n), intercept))
+                                        beta_A[k] = np.linalg.lstsq(X_A_w_int, y.reshape(1,n))
+                                np.savetxt(fname='additive_betas.chr'+str(chr+1)+'.tsv', 
+                                           X=beta_A,
+                                           fmt='%.3e',
+                                           delimiter='\t',
+                                           header='additive_betas')
+
+                else:
+                        for chr in range(args.n_chr):
+                                log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
+                                for variant in tree_sequence_list_geno[chr].variants():
+                                        X_A, X_D = sg.nextSNP(variant, index=index)
+                                        # Then sum to get the effect size on the phenotype.
+                                        chisq_A[k] = np.dot(y.reshape(1,n), X_A)**2 / n
+                                        chisq_D[k] = np.dot(y.reshape(1,n), X_D)**2 / n
+                                        chisq_AC[k] = np.dot(y.reshape(1,n), C_sim * X_A)**2 / n
+                                        k += 1
         if args.write_pheno or args.write_trees:
                 if args.case_control:
                         sample_ID = index
