@@ -3,11 +3,12 @@ import msprime
 import pandas as pd
 import numpy as np
 import os
+import gzip
 
 def trees(out, tree_sequence, chr, m, n_pops, N, sim, vcf, sample_index):
 	# DEV: Throw a warning if you try to do this and n_sims is high.
-	vcf_name = out + ".vcf"
-	with open(vcf_name, "w") as vcf_file:
+	vcf_name = out + ".vcf.gz"
+	with gzip.open(vcf_name, "wt") as vcf_file:
 		tree_sequence.write_vcf(vcf_file, ploidy=2)
 
 	print(N)
