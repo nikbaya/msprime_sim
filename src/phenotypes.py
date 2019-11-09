@@ -175,11 +175,11 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
                                 k += 1
 
                 if args.write_betas:
-                        np.savetxt(fname='true_beta_A.chr'+str(chr+1)+'.tsv',
+                        np.savetxt(fname=args.out+'.true_beta_A.chr'+str(chr+1)+'.tsv',
                                    X=beta_A,
                                    fmt='%.3e',
                                    delimiter='\t',
-                                   header='true_beta_A.chr'+str(chr+1))
+                                   header=args.out+'.true_beta_A.chr'+str(chr+1))
         # Add noise to the y.
         y += np.random.normal(loc=0, scale=np.sqrt(1-(args.h2_A+args.h2_D+args.h2_AC+args.s2)), size=N)
         # Finally, normalise.
@@ -239,11 +239,11 @@ def get_chisq(args, tree_sequence_list_geno, m_geno, m_geno_total, y, N, C, sim,
                                         coef, _, _, _ = np.linalg.lstsq(X_A_w_int, y.reshape(n,),rcond=None)
                                         beta_A[k_beta] = coef[0] # take only the beta for the genotypes, not the intercept
                                         k_beta += 1
-                                np.savetxt(fname='marginal_beta_A.chr'+str(chr+1)+'.tsv', 
+                                np.savetxt(fname=args.out+'.marginal_beta_A.chr'+str(chr+1)+'.tsv', 
                                            X=beta_A,
                                            fmt='%.3e',
                                            delimiter='\t',
-                                           header='marginal_beta_A.chr'+str(chr+1))
+                                           header=args.out+'.marginal_beta_A.chr'+str(chr+1))
                 k = 0
                 for chr in range(args.n_chr):
                         log.log('Determining chi-squared statistics in chromosome {chr}'.format(chr=chr+1))
