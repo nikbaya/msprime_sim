@@ -175,8 +175,13 @@ def get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log):
                                 k += 1
 
                 if args.write_betas:
+                        if args.p_causal < 1:
+                            beta_A_chr = np.zeros(m_chr)
+                            np.put(beta_A_chr, causal_A_index, beta_A)
+                        else:
+                            beta_A_chr = beta_A 
                         np.savetxt(fname=args.out+'.true_beta_A.chr'+str(chr+1)+'.tsv',
-                                   X=beta_A,
+                                   X=beta_A_chr,
                                    fmt='%.3e',
                                    delimiter='\t',
                                    header=args.out+'.true_beta_A.chr'+str(chr+1))
