@@ -106,15 +106,14 @@ def simulate_tree_and_betas(args, log):
                     lN_A, lN_D = lN_A[np.concatenate(genotyped_list_index, 0)], lN_D[np.concatenate(genotyped_list_index, 0)]
         # Note that we pass the tree_sequence_list as potentially non-genotyped SNPs affect phenotype.
         y, C = ph.get_phenotypes(args, N, n_pops, tree_sequence_list, m_total, log)
-        if not args.ldsc and args.write_pheno:
-            sample_ID = ['tsk_'+str(i) for i in range(N)]
-            df_pheno = pd.DataFrame({'FID':sample_ID,'IID':sample_ID,'phenotype':y})
-            phen_file = args.out + '.sim' + str(sim+1) + '.pheno.tsv'
-            df_pheno.to_csv(phen_file, sep='\t', header=True, index=False)
-            log.log('Evaluated phenotypes.')
-            if not args.vcf:
-                bfile = args.out + '.chr1.sim' + str(sim+1) 
-                os.system(args.plink + ' --bfile ' + bfile + ' --pheno ' + phen_file + ' --make-bed --out ' + bfile)
+        sample_ID = ['tsk_'+str(i) for i in range(N)]
+        df_pheno = pd.DataFrame({'FID':sample_ID,'IID':sample_ID,'phenotype':y})
+        phen_file = args.out + '.sim' + str(sim+1) + '.pheno.tsv'
+        df_pheno.to_csv(phen_file, sep='\t', header=True, index=False)
+        log.log('Evaluated phenotypes.')
+        if not args.vcf:
+            bfile = args.out + '.chr1.sim' + str(sim+1) 
+            os.system(args.plink + ' --bfile ' + bfile + ' --pheno ' + phen_file + ' --make-bed --out ' + bfile)
 
 
         # Need to alter this function - splitting further.
