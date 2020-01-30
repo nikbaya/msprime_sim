@@ -152,7 +152,7 @@ conda create -n msprime -y -q python=3 tqdm matplotlib pandas scipy # create con
 conda activate msprime # activate msprime environment
 conda install -c conda-forge msprime # install msprime Python package
 pip install parse statsmodels # install parse and statsmodel
-git clone https://github.com/astheeggeggs/msprime_sim.git # clone GitHub repo
+git clone https://github.com/nikbaya/msprime_sim.git # clone GitHub repo
 mkdir ~/plink ; cd ~/plink # make PLINK directory
 wget http://s3.amazonaws.com/plink1-assets/plink_linux_x86_64_20191028.zip # get PLINK installation files
 unzip plink_linux_x86_64_20191028.zip # unzip PLINK files
