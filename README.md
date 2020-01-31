@@ -148,7 +148,7 @@ Estimate heritability using PCGC. *Warning: slow and memory intensive* (Default:
   
 ## Installation on Google Cloud VM
 ```
-conda create -n msprime -y -q python=3 tqdm matplotlib pandas scipy # create conda environment named msprime and install msprime dependencies
+conda create -n msprime -y -q python=3.6 tqdm matplotlib pandas scipy # create conda environment named msprime and install msprime dependencies
 conda activate msprime # activate msprime environment
 conda install -c conda-forge msprime # install msprime Python package
 pip install parse statsmodels # install parse and statsmodel
