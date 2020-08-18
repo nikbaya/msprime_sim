@@ -30,6 +30,7 @@ parser.add_argument('--mut', type=float, required=False, default=2e-8, help="Mut
 parser.add_argument('--maf', type=float, required=False, default=0.05, help="MAF to filter variants by")
 parser.add_argument('--plink', type=str, required=False, default='/home/nbaya/plink/plink', help='path to plink executable')
 parser.add_argument('--chr', type=int, required=True, help="contig number")
+parser.add_argument('--out', type=str, required=False, default=None, help='prefix for output files')
 args = parser.parse_args()
 
 n = args.n
@@ -39,6 +40,7 @@ mut = args.mut
 maf = args.maf
 plink = args.plink
 chrom = args.chr
+out = args.out
 
 def out_of_africa(N_haps, no_migration):
         N_A = 7300
@@ -113,7 +115,8 @@ print(f'EU size: {N_EU}')
 ## Simulate
 
 Ne = N_EU
-out = f'test_msprime.Nsim_{N_sim}.m_{m}.maf_{maf}.chr{chrom}'
+out = f'msprime.n_{N_sim}.m_{m}.maf_{maf}' if type(out)==type(None) else out
+out += f'.chr{chrom}'
 
 print(f'\n... Starting simulation ...\nN_sim={N_sim}\tm={m}\nout: {out}')
 start_sim = dt.now()
